@@ -2,72 +2,163 @@
 {% block title %}Dashboard – IT Helpdesk{% endblock %}
 {% block content %}
 
-<div class="mb-6">
-  <h1 class="text-2xl font-bold text-gray-800">Dashboard</h1>
-  <p class="text-gray-500 text-sm mt-1">Welcome back, {{ user.get_full_name|default:user.username }}</p>
+<div class="mb-6 flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-800">Dashboard</h1>
+    <p class="text-gray-500 text-sm mt-1">Welcome back, {{ user.get_full_name|default:user.username }}</p>
+  </div>
+  <a href="{% url 'create_ticket' %}" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">+ New Ticket</a>
 </div>
 
-<!-- Stats Cards -->
-<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-  <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 uppercase tracking-wide">Total Tickets</p>
-    <p class="text-3xl font-bold text-gray-800 mt-1">{{ stats.total }}</p>
+<!-- Stats -->
+<div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
+  {% for label, value, color in stats_display %}
+  <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+    <p class="text-xs text-gray-500 uppercase tracking-wide">{{ label }}</p>
+    <p class="text-3xl font-bold mt-1 {{ color }}">{{ value }}</p>
   </div>
-  <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 uppercase tracking-wide">Open</p>
-    <p class="text-3xl font-bold text-blue-600 mt-1">{{ stats.open }}</p>
+  {% endfor %}
+</div>
+
+<!-- Charts Row -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+  <!-- Ticket Volume Chart -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <h2 class="text-base font-semibold text-gray-700 mb-4">Tickets This Week</h2>
+    <canvas id="volumeChart" height="120"></canvas>
   </div>
-  <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 uppercase tracking-wide">In Progress</p>
-    <p class="text-3xl font-bold text-yellow-500 mt-1">{{ stats.in_progress }}</p>
-  </div>
-  <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 uppercase tracking-wide">Resolved</p>
-    <p class="text-3xl font-bold text-green-600 mt-1">{{ stats.resolved }}</p>
-  </div>
-  <div class="bg-white rounded-xl p-5 shadow-sm border {% if stats.sla_breached > 0 %}border-red-200 bg-red-50{% else %}border-gray-100{% endif %}">
-    <p class="text-xs {% if stats.sla_breached > 0 %}text-red-500{% else %}text-gray-500{% endif %} uppercase tracking-wide">SLA Breached</p>
-    <p class="text-3xl font-bold {% if stats.sla_breached > 0 %}text-red-600{% else %}text-gray-800{% endif %} mt-1">{{ stats.sla_breached }}</p>
+
+  <!-- Avg Resolution by Category -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <h2 class="text-base font-semibold text-gray-700 mb-4">Avg Resolution Time (hrs) by Category</h2>
+    {% if cat_resolution %}
+    <div class="space-y-2">
+      {% for cat, hrs in cat_resolution.items %}
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-gray-500 w-24 capitalize flex-shrink-0">{{ cat }}</span>
+        <div class="flex-1 bg-gray-100 rounded-full h-2">
+          <div class="bg-blue-500 h-2 rounded-full" style="width: {% widthratio hrs 48 100 %}%"></div>
+        </div>
+        <span class="text-xs font-semibold text-gray-700 w-10 text-right">{{ hrs }}h</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-400">No resolved tickets yet.</p>
+    {% endif %}
   </div>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
   <!-- My Tickets -->
-  <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-    <h2 class="text-base font-semibold text-gray-700 mb-4">My Open Tickets</h2>
-    {% if my_tickets %}
-    <table class="w-full text-sm">
-      <thead><tr class="text-left text-xs text-gray-400 uppercase border-b">
-        <th class="pb-2">#</th><th class="pb-2">Title</th><th class="pb-2">Priority</th><th class="pb-2">Status</th>
-      </tr></thead>
-      <tbody class="divide-y divide-gray-50">
-      {% for t in my_tickets %}
-      <tr class="hover:bg-gray-50">
-        <td class="py-2 text-gray-400">{{ t.id }}</td>
-        <td class="py-2"><a href="{% url 'ticket_detail' t.pk %}" class="font-medium text-blue-600 hover:underline">{{ t.title|truncatechars:45 }}</a>
-          {% if t.id in sla_breached_ids %}<span class="ml-1 text-xs bg-red-100 text-red-600 px-1 rounded">SLA</span>{% endif %}
-        </td>
-        <td class="py-2">
-          <span class="px-2 py-0.5 rounded-full text-xs font-medium
-            {% if t.priority == 'critical' %}bg-red-100 text-red-700
-            {% elif t.priority == 'high' %}bg-orange-100 text-orange-700
-            {% elif t.priority == 'medium' %}bg-yellow-100 text-yellow-700
-            {% else %}bg-gray-100 text-gray-600{% endif %}">{{ t.get_priority_display }}</span>
-        </td>
-        <td class="py-2 text-gray-500">{{ t.get_status_display }}</td>
-      </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <p class="text-gray-400 text-sm">No open tickets assigned to you.</p>
+  <div class="lg:col-span-2 space-y-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      <h2 class="text-base font-semibold text-gray-700 mb-4">My Open Tickets</h2>
+      {% if my_tickets %}
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-xs text-gray-400 uppercase border-b">
+          <th class="pb-2">#</th><th class="pb-2">Title</th><th class="pb-2">Priority</th><th class="pb-2">SLA</th>
+        </tr></thead>
+        <tbody class="divide-y divide-gray-50">
+        {% for t in my_tickets %}
+        <tr class="hover:bg-gray-50">
+          <td class="py-2 text-gray-400">{{ t.id }}</td>
+          <td class="py-2">
+            <a href="{% url 'ticket_detail' t.pk %}" class="font-medium text-blue-600 hover:underline">{{ t.title|truncatechars:40 }}</a>
+            {% if t.id in sla_breached_ids %}<span class="ml-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">SLA!</span>{% endif %}
+          </td>
+          <td class="py-2">
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium
+              {% if t.priority == 'critical' %}bg-red-100 text-red-700
+              {% elif t.priority == 'high' %}bg-orange-100 text-orange-700
+              {% elif t.priority == 'medium' %}bg-yellow-100 text-yellow-700
+              {% else %}bg-gray-100 text-gray-600{% endif %}">{{ t.get_priority_display }}</span>
+          </td>
+          <td class="py-2 text-xs text-gray-500">{{ t.sla_hours }}h</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="text-gray-400 text-sm">No open tickets assigned to you. 🎉</p>
+      {% endif %}
+    </div>
+
+    <!-- Unassigned Queue -->
+    {% if unassigned_tickets %}
+    <div class="bg-white rounded-xl shadow-sm border border-orange-100 p-6">
+      <h2 class="text-base font-semibold text-orange-700 mb-4">⚠️ Unassigned Tickets ({{ stats.unassigned }})</h2>
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-xs text-gray-400 uppercase border-b">
+          <th class="pb-2">#</th><th class="pb-2">Title</th><th class="pb-2">Category</th><th class="pb-2">Priority</th><th class="pb-2"></th>
+        </tr></thead>
+        <tbody class="divide-y divide-gray-50">
+        {% for t in unassigned_tickets %}
+        <tr class="hover:bg-orange-50">
+          <td class="py-2 text-gray-400">{{ t.id }}</td>
+          <td class="py-2"><a href="{% url 'ticket_detail' t.pk %}" class="font-medium text-blue-600 hover:underline">{{ t.title|truncatechars:35 }}</a></td>
+          <td class="py-2 text-gray-500 capitalize text-xs">{{ t.get_category_display }}</td>
+          <td class="py-2">
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium
+              {% if t.priority == 'critical' %}bg-red-100 text-red-700
+              {% elif t.priority == 'high' %}bg-orange-100 text-orange-700
+              {% else %}bg-yellow-100 text-yellow-700{% endif %}">{{ t.get_priority_display }}</span>
+          </td>
+          <td class="py-2">
+            <form method="post" action="{% url 'ticket_detail' t.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="pickup">
+              <button type="submit" class="text-xs bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700">Pick Up</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% endif %}
+
+    <!-- Recent All Tickets -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-semibold text-gray-700">Recent Tickets</h2>
+        <a href="{% url 'ticket_list' %}" class="text-sm text-blue-600 hover:underline">View all →</a>
+      </div>
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-xs text-gray-400 uppercase border-b">
+          <th class="pb-2">#</th><th class="pb-2">Title</th><th class="pb-2">Priority</th><th class="pb-2">Assigned</th><th class="pb-2">Status</th>
+        </tr></thead>
+        <tbody class="divide-y divide-gray-50">
+        {% for t in all_tickets %}
+        <tr class="hover:bg-gray-50">
+          <td class="py-2 text-gray-400">{{ t.id }}</td>
+          <td class="py-2"><a href="{% url 'ticket_detail' t.pk %}" class="font-medium text-blue-600 hover:underline">{{ t.title|truncatechars:38 }}</a></td>
+          <td class="py-2">
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium
+              {% if t.priority == 'critical' %}bg-red-100 text-red-700
+              {% elif t.priority == 'high' %}bg-orange-100 text-orange-700
+              {% elif t.priority == 'medium' %}bg-yellow-100 text-yellow-700
+              {% else %}bg-gray-100 text-gray-600{% endif %}">{{ t.get_priority_display }}</span>
+          </td>
+          <td class="py-2 text-gray-500 text-xs">{{ t.assigned_to.get_full_name|default:t.assigned_to.username|default:"—" }}</td>
+          <td class="py-2">
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium
+              {% if t.status == 'open' %}bg-blue-100 text-blue-700
+              {% elif t.status == 'in_progress' %}bg-yellow-100 text-yellow-700
+              {% elif t.status == 'resolved' %}bg-green-100 text-green-700
+              {% else %}bg-gray-100 text-gray-600{% endif %}">{{ t.get_status_display }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <!-- Side Panel -->
+  <!-- Sidebar -->
   <div class="space-y-6">
-    <!-- Category Breakdown -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
       <h2 class="text-base font-semibold text-gray-700 mb-4">Tickets by Category</h2>
       {% for item in category_counts %}
@@ -80,7 +171,7 @@
 
     {% if avg_resolution %}
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-      <h2 class="text-base font-semibold text-gray-700 mb-1">Avg Resolution Time</h2>
+      <h2 class="text-sm font-semibold text-gray-700 mb-1">Overall Avg Resolution</h2>
       <p class="text-3xl font-bold text-blue-600">{{ avg_resolution }}h</p>
     </div>
     {% endif %}
@@ -90,51 +181,40 @@
       <h2 class="text-base font-semibold text-gray-700 mb-4">Staff Workload</h2>
       {% for staff in staff_workload %}
       <div class="flex items-center justify-between mb-2 text-sm">
-        <span class="text-gray-600">{{ staff.get_full_name|default:staff.username }}</span>
-        <span class="font-semibold text-gray-800">{{ staff.open_count }} open</span>
+        <div>
+          <span class="text-gray-700 font-medium">{{ staff.get_full_name|default:staff.username }}</span>
+          {% if staff.profile.role %}<span class="ml-1 text-xs text-gray-400">({{ staff.profile.get_role_display }})</span>{% endif %}
+        </div>
+        <span class="font-semibold {% if staff.open_count > 5 %}text-red-600{% elif staff.open_count > 2 %}text-orange-500{% else %}text-green-600{% endif %}">{{ staff.open_count }} open</span>
       </div>
       {% endfor %}
     </div>
     {% endif %}
   </div>
-
 </div>
 
-<!-- Recent All Tickets -->
-<div class="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="text-base font-semibold text-gray-700">Recent Tickets</h2>
-    <a href="{% url 'ticket_list' %}" class="text-sm text-blue-600 hover:underline">View all →</a>
-  </div>
-  <table class="w-full text-sm">
-    <thead><tr class="text-left text-xs text-gray-400 uppercase border-b">
-      <th class="pb-2">#</th><th class="pb-2">Title</th><th class="pb-2">Category</th>
-      <th class="pb-2">Priority</th><th class="pb-2">Assigned To</th><th class="pb-2">Status</th>
-    </tr></thead>
-    <tbody class="divide-y divide-gray-50">
-    {% for t in all_tickets %}
-    <tr class="hover:bg-gray-50">
-      <td class="py-2 text-gray-400">{{ t.id }}</td>
-      <td class="py-2"><a href="{% url 'ticket_detail' t.pk %}" class="font-medium text-blue-600 hover:underline">{{ t.title|truncatechars:40 }}</a></td>
-      <td class="py-2 text-gray-500 capitalize">{{ t.category }}</td>
-      <td class="py-2">
-        <span class="px-2 py-0.5 rounded-full text-xs font-medium
-          {% if t.priority == 'critical' %}bg-red-100 text-red-700
-          {% elif t.priority == 'high' %}bg-orange-100 text-orange-700
-          {% elif t.priority == 'medium' %}bg-yellow-100 text-yellow-700
-          {% else %}bg-gray-100 text-gray-600{% endif %}">{{ t.get_priority_display }}</span>
-      </td>
-      <td class="py-2 text-gray-500">{{ t.assigned_to.get_full_name|default:t.assigned_to.username|default:"Unassigned" }}</td>
-      <td class="py-2">
-        <span class="px-2 py-0.5 rounded-full text-xs font-medium
-          {% if t.status == 'open' %}bg-blue-100 text-blue-700
-          {% elif t.status == 'in_progress' %}bg-yellow-100 text-yellow-700
-          {% elif t.status == 'resolved' %}bg-green-100 text-green-700
-          {% else %}bg-gray-100 text-gray-600{% endif %}">{{ t.get_status_display }}</span>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx = document.getElementById('volumeChart').getContext('2d');
+new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: {{ chart_labels|safe }},
+    datasets: [{
+      label: 'Tickets Created',
+      data: {{ chart_data|safe }},
+      backgroundColor: 'rgba(37, 99, 235, 0.7)',
+      borderRadius: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { beginAtZero: true, ticks: { stepSize: 1 } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+</script>
 {% endblock %}

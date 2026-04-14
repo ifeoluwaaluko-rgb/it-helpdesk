@@ -2,50 +2,80 @@
 {% block title %}Ticket #{{ ticket.id }} – IT Helpdesk{% endblock %}
 {% block content %}
 
-<div class="mb-4">
+<div class="mb-4 flex items-center justify-between">
   <a href="{% url 'ticket_list' %}" class="text-sm text-gray-400 hover:text-blue-600">← All Tickets</a>
+  {% if not ticket.assigned_to %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="pickup">
+    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+      🙋 Pick Up This Ticket
+    </button>
+  </form>
+  {% elif ticket.assigned_to == request.user and ticket.status == 'open' %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="update_status">
+    <input type="hidden" name="status" value="in_progress">
+    <button type="submit" class="bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+      ▶ Start Working
+    </button>
+  </form>
+  {% endif %}
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-  <!-- Main Content -->
+  <!-- Main -->
   <div class="lg:col-span-2 space-y-6">
 
-    <!-- Ticket Header -->
+    <!-- Header -->
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-      <div class="flex items-start justify-between gap-4">
+      <div class="flex items-start justify-between gap-4 mb-4">
         <div>
           <h1 class="text-xl font-bold text-gray-800">{{ ticket.title }}</h1>
           <p class="text-sm text-gray-400 mt-1">Ticket #{{ ticket.id }} · From: {{ ticket.user_email }} · {{ ticket.created_at|date:"M d, Y H:i" }}</p>
         </div>
-        <div class="flex gap-2 flex-shrink-0">
+        <div class="flex flex-wrap gap-2 flex-shrink-0">
           <span class="px-3 py-1 rounded-full text-xs font-semibold
             {% if ticket.priority == 'critical' %}bg-red-100 text-red-700
             {% elif ticket.priority == 'high' %}bg-orange-100 text-orange-700
             {% elif ticket.priority == 'medium' %}bg-yellow-100 text-yellow-700
-            {% else %}bg-gray-100 text-gray-600{% endif %}">
-            {{ ticket.get_priority_display }}
-          </span>
+            {% else %}bg-gray-100 text-gray-600{% endif %}">{{ ticket.get_priority_display }}</span>
           <span class="px-3 py-1 rounded-full text-xs font-semibold
             {% if ticket.status == 'open' %}bg-blue-100 text-blue-700
             {% elif ticket.status == 'in_progress' %}bg-yellow-100 text-yellow-700
             {% elif ticket.status == 'resolved' %}bg-green-100 text-green-700
-            {% else %}bg-gray-100 text-gray-600{% endif %}">
-            {{ ticket.get_status_display }}
-          </span>
+            {% else %}bg-gray-100 text-gray-600{% endif %}">{{ ticket.get_status_display }}</span>
           {% if ticket.is_sla_breached %}
-          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">⚠ SLA Breached</span>
+          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 animate-pulse">⚠ SLA Breached</span>
           {% endif %}
         </div>
       </div>
 
-      <div class="mt-4 bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap">{{ ticket.description }}</div>
+      <!-- SLA Countdown -->
+      {% if ticket.status not in 'resolved,closed' %}
+      <div class="mb-4 p-3 rounded-lg {% if ticket.is_sla_breached %}bg-red-50 border border-red-200{% else %}bg-blue-50 border border-blue-100{% endif %}">
+        <div class="flex items-center justify-between text-sm">
+          <span class="{% if ticket.is_sla_breached %}text-red-600{% else %}text-blue-600{% endif %} font-medium">
+            {% if ticket.is_sla_breached %}⏰ SLA Deadline Passed{% else %}⏱ SLA Deadline{% endif %}
+          </span>
+          <span class="font-semibold {% if ticket.is_sla_breached %}text-red-700{% else %}text-blue-700{% endif %}" id="sla-countdown">
+            {{ ticket.sla_deadline|date:"M d, Y H:i" }}
+          </span>
+        </div>
+        {% if not ticket.is_sla_breached %}
+        <div class="mt-2 text-xs text-blue-500" id="time-remaining">Calculating...</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <div class="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap">{{ ticket.description }}</div>
     </div>
 
     <!-- Comments -->
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <h2 class="text-base font-semibold text-gray-700 mb-4">Activity & Notes</h2>
-
       {% for comment in comments %}
       <div class="mb-4 flex gap-3">
         <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
@@ -55,7 +85,6 @@
           <div class="flex items-center gap-2 mb-1">
             <span class="text-sm font-semibold text-gray-700">{{ comment.author.get_full_name|default:comment.author.username }}</span>
             <span class="text-xs text-gray-400">{{ comment.created_at|date:"M d, H:i" }}</span>
-            {% if comment.is_internal %}<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Internal</span>{% endif %}
           </div>
           <div class="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-700">{{ comment.body }}</div>
         </div>
@@ -64,19 +93,18 @@
       <p class="text-sm text-gray-400 mb-4">No comments yet.</p>
       {% endfor %}
 
-      <!-- Add Comment -->
       <form method="post" class="mt-4 border-t border-gray-100 pt-4">
         {% csrf_token %}
         <input type="hidden" name="action" value="comment">
         <textarea name="body" rows="3" placeholder="Add an internal note..." required
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
         <div class="mt-2 flex justify-end">
-          <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">Add Note</button>
+          <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg">Add Note</button>
         </div>
       </form>
     </div>
 
-    <!-- Knowledge Base Suggestions -->
+    <!-- Related KB Articles -->
     {% if related_articles %}
     <div class="bg-white rounded-xl border border-blue-100 shadow-sm p-6">
       <h2 class="text-base font-semibold text-gray-700 mb-3">💡 Related Knowledge Articles</h2>
@@ -106,14 +134,17 @@
           <option value="{{ val }}" {% if ticket.status == val %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
-        <button type="submit" class="w-full bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold py-2 rounded-lg transition">Update</button>
+        <button type="submit" class="w-full bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold py-2 rounded-lg">Update</button>
       </form>
     </div>
 
     <!-- Reassign -->
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-      <h3 class="text-sm font-semibold text-gray-700 mb-3">Assigned To</h3>
-      <p class="text-sm text-gray-600 mb-3">{{ ticket.assigned_to.get_full_name|default:ticket.assigned_to.username|default:"Unassigned" }}</p>
+      <h3 class="text-sm font-semibold text-gray-700 mb-1">Assigned To</h3>
+      <p class="text-sm text-gray-600 mb-3">
+        {% if ticket.assigned_to %}{{ ticket.assigned_to.get_full_name|default:ticket.assigned_to.username }}
+        {% else %}<span class="text-orange-500 font-medium">Unassigned</span>{% endif %}
+      </p>
       <form method="post" class="space-y-2">
         {% csrf_token %}
         <input type="hidden" name="action" value="reassign">
@@ -125,14 +156,14 @@
           </option>
           {% endfor %}
         </select>
-        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 rounded-lg transition">Reassign</button>
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 rounded-lg">Reassign</button>
       </form>
     </div>
 
-    <!-- Ticket Meta -->
+    <!-- Details -->
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-3 text-sm">
       <h3 class="font-semibold text-gray-700">Details</h3>
-      <div class="flex justify-between"><span class="text-gray-400">Category</span><span class="font-medium capitalize">{{ ticket.get_category_display }}</span></div>
+      <div class="flex justify-between"><span class="text-gray-400">Category</span><span class="font-medium">{{ ticket.get_category_display }}</span></div>
       <div class="flex justify-between"><span class="text-gray-400">Required Level</span><span class="font-medium capitalize">{{ ticket.required_level }}</span></div>
       <div class="flex justify-between"><span class="text-gray-400">SLA Target</span><span class="font-medium">{{ ticket.sla_hours }}h</span></div>
       {% if ticket.resolution_time_hours %}
@@ -141,14 +172,32 @@
       <div class="flex justify-between"><span class="text-gray-400">Updated</span><span class="text-gray-500">{{ ticket.updated_at|date:"M d, H:i" }}</span></div>
     </div>
 
-    <!-- Save to KB -->
     {% if ticket.status == 'resolved' %}
     <a href="{% url 'create_article_from_ticket' ticket.pk %}"
       class="block w-full text-center bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2.5 rounded-xl transition">
       📚 Save as Knowledge Article
     </a>
     {% endif %}
-
   </div>
 </div>
+
+<script>
+// Live SLA countdown
+const remaining = {{ ticket.sla_remaining_seconds }};
+const el = document.getElementById('time-remaining');
+if (el && remaining > 0) {
+  function update() {
+    const now = remaining - Math.floor((Date.now() - pageLoad) / 1000);
+    if (now <= 0) { el.textContent = 'SLA deadline has passed'; el.className = 'mt-2 text-xs text-red-500 font-semibold'; return; }
+    const h = Math.floor(now / 3600);
+    const m = Math.floor((now % 3600) / 60);
+    const s = now % 60;
+    el.textContent = `${h}h ${m}m ${s}s remaining`;
+    if (now < 3600) el.className = 'mt-2 text-xs text-orange-500 font-semibold';
+    setTimeout(update, 1000);
+  }
+  const pageLoad = Date.now();
+  update();
+}
+</script>
 {% endblock %}

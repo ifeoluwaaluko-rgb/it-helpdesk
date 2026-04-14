@@ -69,11 +69,20 @@ class Ticket(models.Model):
         return f"#{self.id} - {self.title}"
 
     @property
+    def sla_deadline(self):
+        return self.created_at + timezone.timedelta(hours=self.sla_hours)
+
+    @property
     def is_sla_breached(self):
         if self.status in ['resolved', 'closed']:
             return False
-        deadline = self.created_at + timezone.timedelta(hours=self.sla_hours)
-        return timezone.now() > deadline
+        return timezone.now() > self.sla_deadline
+
+    @property
+    def sla_remaining_seconds(self):
+        """Positive = time left. Negative = overdue."""
+        delta = self.sla_deadline - timezone.now()
+        return int(delta.total_seconds())
 
     @property
     def resolution_time_hours(self):

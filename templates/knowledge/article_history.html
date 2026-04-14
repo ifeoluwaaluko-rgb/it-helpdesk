@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}History: {{ article.title }}{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <div class="mb-6">
+    <a href="{% url 'article_detail' article.pk %}" class="text-sm text-gray-400 hover:text-blue-600">← Back to Article</a>
+    <h1 class="text-2xl font-bold text-gray-800 mt-2">Edit History</h1>
+    <p class="text-sm text-gray-500 mt-1">{{ article.title }}</p>
+  </div>
+
+  <!-- Current Version -->
+  <div class="bg-green-50 border border-green-200 rounded-xl p-5 mb-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <span class="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full font-semibold">Current Version</span>
+        <p class="text-sm font-medium text-gray-700 mt-2">{{ article.title }}</p>
+        <p class="text-xs text-gray-500 mt-1">
+          📝 Originally created by <strong>{{ article.created_by.get_full_name|default:article.created_by.username }}</strong> on {{ article.created_at|date:"M d, Y" }}
+          {% if article.last_modified_by %}
+          · ✏️ Last modified by <strong>{{ article.last_modified_by.get_full_name|default:article.last_modified_by.username }}</strong> on {{ article.updated_at|date:"M d, Y H:i" }}
+          {% endif %}
+        </p>
+      </div>
+      <a href="{% url 'article_detail' article.pk %}" class="text-sm text-blue-600 hover:underline">View →</a>
+    </div>
+  </div>
+
+  <!-- Revisions -->
+  {% if revisions %}
+  <div class="space-y-3">
+    {% for rev in revisions %}
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <div class="flex items-start justify-between">
+        <div>
+          <p class="text-sm font-medium text-gray-700">{{ rev.title }}</p>
+          <p class="text-xs text-gray-500 mt-1">
+            Saved by <strong>{{ rev.edited_by.get_full_name|default:rev.edited_by.username|default:"Unknown" }}</strong>
+            on {{ rev.edited_at|date:"M d, Y H:i" }}
+          </p>
+          {% if rev.revision_note %}
+          <p class="text-xs text-blue-600 mt-1 italic">"{{ rev.revision_note }}"</p>
+          {% endif %}
+        </div>
+        <a href="{% url 'revision_detail' article.pk rev.pk %}" class="text-xs text-blue-600 hover:underline border border-blue-200 px-3 py-1 rounded-lg flex-shrink-0">View snapshot</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center py-12 text-gray-400">
+    <p class="text-4xl mb-3">📋</p>
+    <p class="font-medium">No edit history yet.</p>
+    <p class="text-sm mt-1">History will appear here after the first edit.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -99,3 +99,12 @@ IMAP_PORT = int(os.environ.get('IMAP_PORT', 993))
 IMAP_USER = os.environ.get('IMAP_USER', 'it@yourcompany.com')
 IMAP_PASSWORD = os.environ.get('IMAP_PASSWORD', '')
 IMAP_FOLDER = 'INBOX'
+
+# Email (SMTP) — set via environment variables
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'IT Helpdesk <noreply@helpdesk.com>')
