@@ -35,9 +35,10 @@ def login_view(request):
         user = authenticate(request, username=request.POST['username'], password=request.POST['password'])
         if user:
             login(request, user)
-            return redirect('dashboard')
+            next_url = request.POST.get('next') or request.GET.get('next') or '/dashboard/'
+            return redirect(next_url)
         messages.error(request, 'Invalid username or password.')
-    return render(request, 'login.html')
+    return render(request, 'login.html', {'next': request.GET.get('next', '')})
 
 
 def logout_view(request):
@@ -100,10 +101,10 @@ def dashboard(request):
     recent = all_tickets[:15] if is_manager else my_tickets[:15]
 
     kpis = [
-        (stats['open'], 'Open', 'text-[#1f73b7]', ''),
-        (stats['in_progress'], 'In Progress', 'text-[#f79a3e]', ''),
-        (stats['resolved'], 'Resolved', 'text-green-600', ''),
-        (stats['sla_breached'], 'SLA Breached', 'text-red-500' if stats['sla_breached'] > 0 else 'text-[#68737d]', ''),
+        (open_count,            'Open',        'text-[#1f73b7]', ''),
+        (in_progress,           'In Progress', 'text-[#f79a3e]', ''),
+        (resolved_count,        'Resolved',    'text-green-600', ''),
+        (len(sla_breached_ids), 'SLA Breached', 'text-red-500' if sla_breached_ids else 'text-[#68737d]', ''),
     ]
 
     context = {

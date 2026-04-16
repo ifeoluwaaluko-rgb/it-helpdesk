@@ -13,6 +13,7 @@
     <div class="bg-white rounded-lg border border-[#d8dcde] p-6 shadow-sm">
       <form method="post" class="space-y-4">
         {% csrf_token %}
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
         <div>
           <label class="zd-label">Username</label>
           <input name="username" type="text" required autofocus class="zd-input" placeholder="Enter your username">
