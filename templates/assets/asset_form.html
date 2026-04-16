@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Register Asset{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <div class="mb-5"><a href="{% url 'asset_list' %}" class="text-sm text-gray-400">← Assets</a><h1 class="text-xl font-bold text-gray-900 mt-2">Register New Asset</h1></div>
+  <div class="zd-card p-5">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Asset ID <span class="text-red-500">*</span></label><input name="asset_id" required placeholder="e.g. LAPTOP-001" class="zd-input"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Name <span class="text-red-500">*</span></label><input name="name" required placeholder="e.g. Dell XPS 15" class="zd-input"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Category</label><select name="category" class="zd-input"><option value="">— Select —</option>{% for cat in categories %}<option value="{{ cat.id }}">{{ cat.icon }} {{ cat.name }}</option>{% endfor %}</select></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Status</label><select name="status" class="zd-input">{% for val, label in status_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}</select></div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Brand</label><input name="brand" class="zd-input"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Model</label><input name="model" class="zd-input"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Serial Number</label><input name="serial_number" class="zd-input"></div>
+        <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Location</label><input name="location" placeholder="e.g. Floor 2, Desk 14" class="zd-input"></div>
+      </div>
+      <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Assign To</label><select name="assigned_to" class="zd-input"><option value="">— Unassigned —</option>{% for s in staff %}<option value="{{ s.id }}">{{ s.full_name }} ({{ s.department.name|default:"No dept" }})</option>{% endfor %}</select></div>
+      <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Notes</label><textarea name="notes" rows="3" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea></div>
+      <div class="flex gap-3 pt-2"><button type="submit" class="zd-btn zd-btn-primary">Register Asset</button><a href="{% url 'asset_list' %}" class="zd-btn zd-btn-secondary">Cancel</a></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

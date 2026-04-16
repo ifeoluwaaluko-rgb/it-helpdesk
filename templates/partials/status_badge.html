@@ -1,0 +1,5 @@
+{% if status == 'open' %}<span class="status-badge bg-blue-100 text-blue-700">Open</span>
+{% elif status == 'in_progress' %}<span class="status-badge bg-yellow-100 text-yellow-700">In Progress</span>
+{% elif status == 'pending' %}<span class="status-badge bg-purple-100 text-purple-700">Pending</span>
+{% elif status == 'resolved' %}<span class="status-badge bg-green-100 text-green-700">Resolved</span>
+{% else %}<span class="status-badge bg-gray-100 text-[#68737d]">Closed</span>{% endif %}

@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Edit History #{{ ticket.id }}{% endblock %}
+{% block breadcrumb %}<a href="{% url 'ticket_list' %}">Tickets</a> / <a href="{% url 'ticket_detail' ticket.pk %}">#{{ ticket.id }}</a> / History{% endblock %}
+{% block content %}
+<div class="max-w-3xl">
+  <h1 class="text-lg font-bold text-[#2f3941] mb-4">Edit History — Ticket #{{ ticket.id }}</h1>
+  <div class="zd-card mb-4 border-green-200">
+    <div class="px-5 py-3 flex items-center justify-between">
+      <div>
+        <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-semibold">Current Version</span>
+        <p class="text-sm font-semibold text-[#2f3941] mt-1">{{ ticket.title }}</p>
+        <p class="text-xs text-[#68737d] mt-0.5">{{ ticket.get_category_display }}{% if ticket.subcategory %} → {{ ticket.subcategory }}{% endif %}{% if ticket.item %} → {{ ticket.item }}{% endif %} · {{ ticket.get_priority_display }} priority</p>
+      </div>
+      <a href="{% url 'ticket_detail' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">View →</a>
+    </div>
+  </div>
+  {% if history %}
+  <div class="space-y-3">
+    {% for h in history %}
+    <div class="zd-card px-5 py-4">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <div class="w-6 h-6 rounded-full bg-[#e9ebed] text-[#2f3941] text-xs font-bold flex items-center justify-center">{{ h.edited_by.username|first|upper }}</div>
+            <span class="text-xs font-semibold text-[#2f3941]">{{ h.edited_by.get_full_name|default:h.edited_by.username }}</span>
+            <span class="text-xs text-[#68737d]">{{ h.edited_at|date:"M d, Y H:i" }}</span>
+            {% if h.edit_note %}<span class="tag italic">{{ h.edit_note }}</span>{% endif %}
+          </div>
+          <p class="text-sm text-[#2f3941] font-medium">{{ h.title }}</p>
+          <p class="text-xs text-[#68737d] mt-0.5">
+            {{ h.category }}{% if h.subcategory %} → {{ h.subcategory }}{% endif %}{% if h.item %} → {{ h.item }}{% endif %}
+            · {{ h.priority }} · {{ h.status }}
+          </p>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="zd-card px-5 py-10 text-center text-[#68737d] text-sm">No edit history yet.</div>
+  {% endif %}
+</div>
+{% endblock %}

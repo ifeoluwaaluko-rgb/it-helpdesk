@@ -1,140 +1,208 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard – IT Helpdesk{% endblock %}
+{% block title %}Dashboard — IT Helpdesk{% endblock %}
+{% block breadcrumb %}Dashboard{% endblock %}
 {% block content %}
 
-<div class="mb-6">
-  <h1 class="text-2xl font-bold text-gray-800">Dashboard</h1>
-  <p class="text-gray-500 text-sm mt-1">Welcome back, {{ user.get_full_name|default:user.username }}</p>
-</div>
-
-<!-- Stats Cards -->
-<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-  <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 uppercase tracking-wide">Total Tickets</p>
-    <p class="text-3xl font-bold text-gray-800 mt-1">{{ stats.total }}</p>
-  </div>
-  <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 uppercase tracking-wide">Open</p>
-    <p class="text-3xl font-bold text-blue-600 mt-1">{{ stats.open }}</p>
-  </div>
-  <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 uppercase tracking-wide">In Progress</p>
-    <p class="text-3xl font-bold text-yellow-500 mt-1">{{ stats.in_progress }}</p>
-  </div>
-  <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-    <p class="text-xs text-gray-500 uppercase tracking-wide">Resolved</p>
-    <p class="text-3xl font-bold text-green-600 mt-1">{{ stats.resolved }}</p>
-  </div>
-  <div class="bg-white rounded-xl p-5 shadow-sm border {% if stats.sla_breached > 0 %}border-red-200 bg-red-50{% else %}border-gray-100{% endif %}">
-    <p class="text-xs {% if stats.sla_breached > 0 %}text-red-500{% else %}text-gray-500{% endif %} uppercase tracking-wide">SLA Breached</p>
-    <p class="text-3xl font-bold {% if stats.sla_breached > 0 %}text-red-600{% else %}text-gray-800{% endif %} mt-1">{{ stats.sla_breached }}</p>
+{% if is_manager %}
+<!-- ══ MANAGER VIEW ══ -->
+<div class="flex items-center justify-between mb-5">
+  <div>
+    <h1 class="text-lg font-bold text-[#2f3941]">Operations Overview</h1>
+    <p class="text-xs text-[#68737d] mt-0.5">System-wide · Live</p>
   </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- KPIs -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+  {% for val, label, color, bg in kpis %}
+  <div class="zd-card p-4">
+    <p class="text-2xl font-black {{ color }}">{{ val }}</p>
+    <p class="text-xs text-[#68737d] mt-1 font-medium uppercase tracking-wide">{{ label }}</p>
+  </div>
+  {% endfor %}
+</div>
 
-  <!-- My Tickets -->
-  <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-    <h2 class="text-base font-semibold text-gray-700 mb-4">My Open Tickets</h2>
-    {% if my_tickets %}
-    <table class="w-full text-sm">
-      <thead><tr class="text-left text-xs text-gray-400 uppercase border-b">
-        <th class="pb-2">#</th><th class="pb-2">Title</th><th class="pb-2">Priority</th><th class="pb-2">Status</th>
+<!-- Row 2 KPIs -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+  <div class="zd-card p-4 flex items-center gap-3">
+    <div class="w-9 h-9 rounded bg-green-100 flex items-center justify-center text-green-600 flex-shrink-0">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div>
+    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.sla_compliance }}%</p><p class="text-xs text-[#68737d]">SLA Compliance</p></div>
+  </div>
+  <div class="zd-card p-4 flex items-center gap-3">
+    <div class="w-9 h-9 rounded bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div>
+    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_resolution }}h</p><p class="text-xs text-[#68737d]">Avg Resolution</p></div>
+  </div>
+  <div class="zd-card p-4 flex items-center gap-3">
+    <div class="w-9 h-9 rounded {% if stats.unassigned > 0 %}bg-orange-100{% else %}bg-gray-100{% endif %} flex items-center justify-center {% if stats.unassigned > 0 %}text-orange-500{% else %}text-gray-500{% endif %} flex-shrink-0">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+    </div>
+    <div><p class="text-lg font-bold {% if stats.unassigned > 0 %}text-orange-500{% else %}text-[#2f3941]{% endif %}">{{ stats.unassigned }}</p><p class="text-xs text-[#68737d]">Unassigned</p></div>
+  </div>
+  <div class="zd-card p-4 flex items-center gap-3">
+    <div class="w-9 h-9 rounded bg-purple-100 flex items-center justify-center text-purple-600 flex-shrink-0">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+    </div>
+    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.total }}</p><p class="text-xs text-[#68737d]">Total Tickets</p></div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+  <!-- Chart -->
+  <div class="lg:col-span-2 zd-card p-5">
+    <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Ticket Volume — Last 7 Days</h3>
+    <canvas id="volumeChart" height="80"></canvas>
+  </div>
+  <!-- Category -->
+  <div class="zd-card p-5">
+    <h3 class="text-sm font-semibold text-[#2f3941] mb-4">By Category</h3>
+    <div class="space-y-3">
+      {% for item in category_counts %}
+      <div>
+        <div class="flex justify-between text-xs mb-1"><span class="text-[#68737d] capitalize">{{ item.category }}</span><span class="font-semibold text-[#2f3941]">{{ item.count }}</span></div>
+        <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-[#1f73b7] rounded-full" style="width:{% if stats.total %}{% widthratio item.count stats.total 100 %}{% else %}0{% endif %}%"></div></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+  <!-- Staff Workload -->
+  <div class="zd-card p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-semibold text-[#2f3941]">Team Workload</h3>
+    </div>
+    <div class="space-y-3">
+      {% for s in staff_workload %}
+      <div class="flex items-center gap-3">
+        <div class="w-7 h-7 rounded-full bg-[#e9ebed] text-[#2f3941] text-xs font-bold flex items-center justify-center flex-shrink-0">{{ s.username|first|upper }}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex justify-between items-center mb-1">
+            <p class="text-xs text-[#2f3941] font-medium truncate">{{ s.get_full_name|default:s.username }}</p>
+            <span class="text-xs font-bold ml-2 {% if s.open_count > 5 %}text-red-500{% elif s.open_count > 2 %}text-orange-500{% else %}text-green-600{% endif %}">{{ s.open_count }}</span>
+          </div>
+          <div class="h-1.5 bg-gray-100 rounded-full"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:{% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%"></div></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <!-- Avg resolution by cat -->
+  <div class="zd-card p-5">
+    <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Avg Resolution by Category</h3>
+    {% if cat_resolution %}
+    <div class="space-y-3">
+      {% for cat, hrs in cat_resolution.items %}
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-[#68737d] w-20 capitalize flex-shrink-0">{{ cat }}</span>
+        <div class="flex-1 h-1.5 bg-gray-100 rounded-full"><div class="h-full bg-[#1f8c8c] rounded-full" style="width:{% widthratio hrs 48 100 %}%"></div></div>
+        <span class="text-xs font-semibold text-[#2f3941] w-8 text-right">{{ hrs }}h</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="text-xs text-[#68737d]">No resolved tickets yet.</p>{% endif %}
+  </div>
+</div>
+
+{% else %}
+<!-- ══ STAFF VIEW ══ -->
+<div class="flex items-center justify-between mb-5">
+  <div>
+    <h1 class="text-lg font-bold text-[#2f3941]">My Workspace</h1>
+    <p class="text-xs text-[#68737d] mt-0.5">{{ user.get_full_name|default:user.username }} · {{ user.profile.get_role_display }}</p>
+  </div>
+</div>
+
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+  <div class="zd-card p-4"><p class="text-2xl font-black text-[#1f73b7]">{{ my_tickets.count }}</p><p class="text-xs text-[#68737d] mt-1 uppercase tracking-wide">Open (Mine)</p></div>
+  <div class="zd-card p-4"><p class="text-2xl font-black text-green-600">{{ my_resolved }}</p><p class="text-xs text-[#68737d] mt-1 uppercase tracking-wide">Resolved</p></div>
+  <div class="zd-card p-4"><p class="text-2xl font-black text-purple-600">{{ my_productivity }}%</p><p class="text-xs text-[#68737d] mt-1 uppercase tracking-wide">Productivity</p></div>
+  <div class="zd-card p-4 {% if stats.sla_breached > 0 %}border-red-200{% endif %}"><p class="text-2xl font-black {% if stats.sla_breached > 0 %}text-red-500{% else %}text-[#68737d]{% endif %}">{{ stats.sla_breached }}</p><p class="text-xs {% if stats.sla_breached > 0 %}text-red-500{% else %}text-[#68737d]{% endif %} mt-1 uppercase tracking-wide">SLA Alerts</p></div>
+</div>
+
+<div class="flex flex-wrap gap-2 mb-5">
+  <a href="{% url 'create_ticket' %}" class="zd-btn zd-btn-primary">+ New Ticket</a>
+  <a href="{% url 'ticket_list' %}?mine=1" class="zd-btn zd-btn-secondary">My Tickets</a>
+  {% if is_consultant %}<a href="{% url 'ticket_list' %}?unassigned=1" class="zd-btn zd-btn-secondary">Unassigned Queue</a>{% endif %}
+  <a href="{% url 'article_list' %}" class="zd-btn zd-btn-secondary">Knowledge Base</a>
+</div>
+{% endif %}
+
+<!-- Unassigned queue (both roles) -->
+{% if unassigned_tickets %}
+<div class="zd-card mb-4 border-orange-200">
+  <div class="flex items-center gap-2 px-5 py-3 border-b border-[#d8dcde]">
+    <svg class="w-4 h-4 text-orange-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+    <h3 class="text-sm font-semibold text-[#2f3941]">Unassigned Tickets</h3>
+    <span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">{{ stats.unassigned }}</span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm min-w-[500px]">
+      <thead class="bg-[#f3f4f6]"><tr class="text-left text-xs text-[#68737d] uppercase font-semibold">
+        <th class="px-5 py-2.5">ID</th><th class="px-5 py-2.5">Title</th><th class="px-5 py-2.5">Category</th><th class="px-5 py-2.5">Priority</th><th class="px-5 py-2.5"></th>
       </tr></thead>
-      <tbody class="divide-y divide-gray-50">
-      {% for t in my_tickets %}
-      <tr class="hover:bg-gray-50">
-        <td class="py-2 text-gray-400">{{ t.id }}</td>
-        <td class="py-2"><a href="{% url 'ticket_detail' t.pk %}" class="font-medium text-blue-600 hover:underline">{{ t.title|truncatechars:45 }}</a>
-          {% if t.id in sla_breached_ids %}<span class="ml-1 text-xs bg-red-100 text-red-600 px-1 rounded">SLA</span>{% endif %}
+      <tbody class="divide-y divide-[#e9ebed]">
+      {% for t in unassigned_tickets %}
+      <tr class="hover:bg-[#f9fafb]">
+        <td class="px-5 py-3 text-[#68737d] text-xs">#{{ t.id }}</td>
+        <td class="px-5 py-3 font-medium text-[#1f73b7]"><a href="{% url 'ticket_detail' t.pk %}" class="hover:underline">{{ t.title|truncatechars:45 }}</a></td>
+        <td class="px-5 py-3 text-xs text-[#68737d]">{{ t.get_category_display }}</td>
+        <td class="px-5 py-3">{% include 'partials/priority_badge.html' with priority=t.priority %}</td>
+        <td class="px-5 py-3">
+          <form method="post" action="{% url 'ticket_detail' t.pk %}">{% csrf_token %}<input type="hidden" name="action" value="pickup"><button class="zd-btn zd-btn-primary text-xs py-1">Pick Up</button></form>
         </td>
-        <td class="py-2">
-          <span class="px-2 py-0.5 rounded-full text-xs font-medium
-            {% if t.priority == 'critical' %}bg-red-100 text-red-700
-            {% elif t.priority == 'high' %}bg-orange-100 text-orange-700
-            {% elif t.priority == 'medium' %}bg-yellow-100 text-yellow-700
-            {% else %}bg-gray-100 text-gray-600{% endif %}">{{ t.get_priority_display }}</span>
-        </td>
-        <td class="py-2 text-gray-500">{{ t.get_status_display }}</td>
       </tr>
       {% endfor %}
       </tbody>
     </table>
-    {% else %}
-    <p class="text-gray-400 text-sm">No open tickets assigned to you.</p>
-    {% endif %}
   </div>
+</div>
+{% endif %}
 
-  <!-- Side Panel -->
-  <div class="space-y-6">
-    <!-- Category Breakdown -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-      <h2 class="text-base font-semibold text-gray-700 mb-4">Tickets by Category</h2>
-      {% for item in category_counts %}
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-sm text-gray-600 capitalize">{{ item.category }}</span>
-        <span class="text-sm font-semibold text-gray-800">{{ item.count }}</span>
-      </div>
-      {% endfor %}
-    </div>
-
-    {% if avg_resolution %}
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-      <h2 class="text-base font-semibold text-gray-700 mb-1">Avg Resolution Time</h2>
-      <p class="text-3xl font-bold text-blue-600">{{ avg_resolution }}h</p>
-    </div>
-    {% endif %}
-
-    {% if is_manager and staff_workload %}
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-      <h2 class="text-base font-semibold text-gray-700 mb-4">Staff Workload</h2>
-      {% for staff in staff_workload %}
-      <div class="flex items-center justify-between mb-2 text-sm">
-        <span class="text-gray-600">{{ staff.get_full_name|default:staff.username }}</span>
-        <span class="font-semibold text-gray-800">{{ staff.open_count }} open</span>
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
+<!-- Recent tickets -->
+<div class="zd-card">
+  <div class="flex items-center justify-between px-5 py-3 border-b border-[#d8dcde]">
+    <h3 class="text-sm font-semibold text-[#2f3941]">{% if is_manager %}Recent Tickets{% else %}My Open Tickets{% endif %}</h3>
+    <a href="{% url 'ticket_list' %}{% if not is_manager %}?mine=1{% endif %}" class="text-xs text-[#1f73b7] hover:underline">View all →</a>
   </div>
-
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm min-w-[600px]">
+      <thead class="bg-[#f3f4f6]"><tr class="text-left text-xs text-[#68737d] uppercase font-semibold">
+        <th class="px-5 py-2.5">ID</th><th class="px-5 py-2.5">Subject</th><th class="px-5 py-2.5">Requester</th>
+        <th class="px-5 py-2.5">Priority</th><th class="px-5 py-2.5">Status</th><th class="px-5 py-2.5">Assignee</th>
+      </tr></thead>
+      <tbody class="divide-y divide-[#e9ebed]">
+      {% for t in recent_tickets %}
+      <tr class="hover:bg-[#f9fafb] {% if t.id in sla_breached_ids %}bg-red-50{% endif %}">
+        <td class="px-5 py-3 text-[#68737d] text-xs">#{{ t.id }}</td>
+        <td class="px-5 py-3">
+          <a href="{% url 'ticket_detail' t.pk %}" class="font-medium text-[#1f73b7] hover:underline">{{ t.title|truncatechars:42 }}</a>
+          {% if t.id in sla_breached_ids %}<span class="ml-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-semibold">SLA</span>{% endif %}
+        </td>
+        <td class="px-5 py-3 text-xs text-[#68737d]">{{ t.requester_name|default:t.user_email|truncatechars:20 }}</td>
+        <td class="px-5 py-3">{% include 'partials/priority_badge.html' with priority=t.priority %}</td>
+        <td class="px-5 py-3">{% include 'partials/status_badge.html' with status=t.status %}</td>
+        <td class="px-5 py-3 text-xs text-[#68737d]">{{ t.assigned_to.get_full_name|default:t.assigned_to.username|default:"—" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="px-5 py-8 text-center text-[#68737d] text-sm">No tickets. 🎉</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 
-<!-- Recent All Tickets -->
-<div class="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="text-base font-semibold text-gray-700">Recent Tickets</h2>
-    <a href="{% url 'ticket_list' %}" class="text-sm text-blue-600 hover:underline">View all →</a>
-  </div>
-  <table class="w-full text-sm">
-    <thead><tr class="text-left text-xs text-gray-400 uppercase border-b">
-      <th class="pb-2">#</th><th class="pb-2">Title</th><th class="pb-2">Category</th>
-      <th class="pb-2">Priority</th><th class="pb-2">Assigned To</th><th class="pb-2">Status</th>
-    </tr></thead>
-    <tbody class="divide-y divide-gray-50">
-    {% for t in all_tickets %}
-    <tr class="hover:bg-gray-50">
-      <td class="py-2 text-gray-400">{{ t.id }}</td>
-      <td class="py-2"><a href="{% url 'ticket_detail' t.pk %}" class="font-medium text-blue-600 hover:underline">{{ t.title|truncatechars:40 }}</a></td>
-      <td class="py-2 text-gray-500 capitalize">{{ t.category }}</td>
-      <td class="py-2">
-        <span class="px-2 py-0.5 rounded-full text-xs font-medium
-          {% if t.priority == 'critical' %}bg-red-100 text-red-700
-          {% elif t.priority == 'high' %}bg-orange-100 text-orange-700
-          {% elif t.priority == 'medium' %}bg-yellow-100 text-yellow-700
-          {% else %}bg-gray-100 text-gray-600{% endif %}">{{ t.get_priority_display }}</span>
-      </td>
-      <td class="py-2 text-gray-500">{{ t.assigned_to.get_full_name|default:t.assigned_to.username|default:"Unassigned" }}</td>
-      <td class="py-2">
-        <span class="px-2 py-0.5 rounded-full text-xs font-medium
-          {% if t.status == 'open' %}bg-blue-100 text-blue-700
-          {% elif t.status == 'in_progress' %}bg-yellow-100 text-yellow-700
-          {% elif t.status == 'resolved' %}bg-green-100 text-green-700
-          {% else %}bg-gray-100 text-gray-600{% endif %}">{{ t.get_status_display }}</span>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx = document.getElementById('volumeChart');
+if(ctx) new Chart(ctx, {
+  type:'bar',
+  data:{labels:{{ chart_labels|safe }},datasets:[{label:'Tickets',data:{{ chart_data|safe }},backgroundColor:'rgba(31,115,183,0.85)',borderRadius:4,borderSkipped:false}]},
+  options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1},grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}
+});
+</script>
 {% endblock %}

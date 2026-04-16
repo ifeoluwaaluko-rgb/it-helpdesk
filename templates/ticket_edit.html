@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block title %}Edit #{{ ticket.id }}{% endblock %}
+{% block breadcrumb %}<a href="{% url 'ticket_list' %}">Tickets</a> / <a href="{% url 'ticket_detail' ticket.pk %}">#{{ ticket.id }}</a> / Edit{% endblock %}
+{% block content %}
+<div class="max-w-2xl">
+  <h1 class="text-lg font-bold text-[#2f3941] mb-4">Edit Ticket #{{ ticket.id }}</h1>
+  <div class="zd-card p-6">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <div>
+        <label class="zd-label">Title <span class="text-red-500">*</span></label>
+        <input name="title" value="{{ ticket.title }}" required class="zd-input">
+      </div>
+      <div>
+        <label class="zd-label">Description <span class="text-red-500">*</span></label>
+        <textarea name="description" rows="6" required class="zd-input resize-none">{{ ticket.description }}</textarea>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="zd-label">Category</label>
+          <select name="category" id="cat-sel" class="zd-select" onchange="loadSubs(this.value)">
+            {% for val, label in category_choices %}<option value="{{ val }}" {% if ticket.category == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="zd-label">Subcategory</label>
+          <select name="subcategory" id="sub-sel" class="zd-select">
+            <option value="{{ ticket.subcategory }}">{{ ticket.subcategory|default:"— Select —" }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="zd-label">Item</label>
+          <input name="item" id="item-inp" value="{{ ticket.item }}" class="zd-input" placeholder="e.g. Microsoft Teams">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="zd-label">Priority</label>
+          <select name="priority" class="zd-select">
+            {% for val, label in priority_choices %}<option value="{{ val }}" {% if ticket.priority == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        {% if can_edit_status %}
+        <div>
+          <label class="zd-label">Status</label>
+          <select name="status" class="zd-select">
+            {% for val, label in status_choices %}<option value="{{ val }}" {% if ticket.status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endif %}
+      </div>
+      <div>
+        <label class="zd-label">Tags <span class="text-[#68737d] font-normal">(comma-separated)</span></label>
+        <input name="tags" value="{{ ticket.tags }}" class="zd-input" placeholder="vpn, windows, floor-2">
+      </div>
+      <div>
+        <label class="zd-label">Edit Note <span class="text-[#68737d] font-normal">(describe what you changed)</span></label>
+        <input name="edit_note" class="zd-input" placeholder="e.g. Corrected category from hardware to software">
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="zd-btn zd-btn-primary">Save Changes</button>
+        <a href="{% url 'ticket_detail' ticket.pk %}" class="zd-btn zd-btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+const tree = {{ category_tree_json|safe }};
+function loadSubs(cat, sel) {
+  const s = document.getElementById('sub-sel');
+  s.innerHTML = '<option value="">— Select —</option>';
+  Object.keys(tree[cat]?.subcategories || {}).forEach(sub => {
+    const o = document.createElement('option');
+    o.value = sub; o.textContent = sub;
+    if (sub === sel) o.selected = true;
+    s.appendChild(o);
+  });
+}
+loadSubs('{{ ticket.category }}', '{{ ticket.subcategory }}');
+</script>
+{% endblock %}

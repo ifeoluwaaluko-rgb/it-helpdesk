@@ -10,7 +10,6 @@ ALLOWED_HOSTS = [
     'web-production-a03c9.up.railway.app',
     '127.0.0.1',
     'localhost',
-    '*',
 ]
 
 CSRF_TRUSTED_ORIGINS = [
