@@ -4,12 +4,15 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-helpdesk-dev-key-change-in-production')
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = os.environ.get('DEBUG', 'False').strip().lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    "web-production-a03c9.up.railway.app",
+]
 CSRF_TRUSTED_ORIGINS = [
-    'https://*.railway.app',
-    'https://*.up.railway.app',
+    "https://web-production-a03c9.up.railway.app",
+    "https://*.railway.app",
+    "https://*.up.railway.app",
 ]
 
 INSTALLED_APPS = [
@@ -21,6 +24,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'tickets',
     'knowledge',
+    'directory',
+    'assets',
 ]
 
 MIDDLEWARE = [
@@ -99,3 +104,12 @@ IMAP_PORT = int(os.environ.get('IMAP_PORT', 993))
 IMAP_USER = os.environ.get('IMAP_USER', 'it@yourcompany.com')
 IMAP_PASSWORD = os.environ.get('IMAP_PASSWORD', '')
 IMAP_FOLDER = 'INBOX'
+
+# Email (SMTP) — set via environment variables
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'IT Helpdesk <noreply@helpdesk.com>')

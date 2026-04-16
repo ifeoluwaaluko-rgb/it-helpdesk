@@ -4,86 +4,97 @@ from django.utils import timezone
 
 
 class Profile(models.Model):
-    ROLES = [
-        ('associate', 'Associate'),
-        ('consultant', 'Consultant'),
-        ('senior', 'Senior'),
-        ('manager', 'Manager'),
-    ]
+    ROLES = [('associate','Associate'),('consultant','Consultant'),('senior','Senior'),('manager','Manager')]
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=20, choices=ROLES, default='associate')
     specialization = models.CharField(max_length=100, blank=True)
+    def __str__(self): return f"{self.user.username} ({self.get_role_display()})"
 
-    def __str__(self):
-        return f"{self.user.username} ({self.get_role_display()})"
+
+class TicketCategory(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=50, unique=True)
+    icon = models.CharField(max_length=10, default='🔧')
+    required_level = models.CharField(max_length=20, default='associate')
+    sla_hours = models.IntegerField(default=24)
+    class Meta: ordering = ['name']
+    def __str__(self): return self.name
+
+
+class TicketSubcategory(models.Model):
+    category = models.ForeignKey(TicketCategory, on_delete=models.CASCADE, related_name='subcategories')
+    name = models.CharField(max_length=100)
+    class Meta:
+        ordering = ['name']
+        unique_together = ('category', 'name')
+    def __str__(self): return f"{self.category.name} > {self.name}"
 
 
 class Ticket(models.Model):
-    STATUS_CHOICES = [
-        ('open', 'Open'),
-        ('in_progress', 'In Progress'),
-        ('resolved', 'Resolved'),
-        ('closed', 'Closed'),
-    ]
-    PRIORITY_CHOICES = [
-        ('low', 'Low'),
-        ('medium', 'Medium'),
-        ('high', 'High'),
-        ('critical', 'Critical'),
-    ]
+    STATUS_CHOICES = [('open','Open'),('in_progress','In Progress'),('resolved','Resolved'),('closed','Closed')]
+    PRIORITY_CHOICES = [('low','Low'),('medium','Medium'),('high','High'),('critical','Critical')]
     CATEGORY_CHOICES = [
-        ('network', 'Network'),
-        ('access', 'Access / Permissions'),
-        ('hardware', 'Hardware'),
-        ('software', 'Software'),
-        ('email', 'Email'),
-        ('password', 'Password Reset'),
-        ('printer', 'Printer'),
-        ('onboarding', 'Onboarding'),
-        ('other', 'Other'),
+        ('network','Network'),('access','Access / Permissions'),('hardware','Hardware'),
+        ('software','Software'),('email','Email'),('password','Password Reset'),
+        ('printer','Printer'),('onboarding','Onboarding'),('other','Other'),
     ]
-    LEVEL_CHOICES = [
-        ('associate', 'Associate'),
-        ('consultant', 'Consultant'),
-        ('senior', 'Senior'),
-        ('manager', 'Manager'),
-    ]
+    LEVEL_CHOICES = [('associate','Associate'),('consultant','Consultant'),('senior','Senior'),('manager','Manager')]
+    CHANNEL_CHOICES = [('email','Email'),('walk_in','Walk-in'),('phone','Phone Call'),('chat','Chat (WhatsApp/Teams/Slack)'),('manual','Manual Entry')]
 
     title = models.CharField(max_length=255)
     description = models.TextField()
     user_email = models.EmailField()
+    requester_name = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
     category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='other')
+    subcategory = models.CharField(max_length=100, blank=True)
+    item = models.CharField(max_length=200, blank=True)
+    channel = models.CharField(max_length=20, choices=CHANNEL_CHOICES, default='manual')
     required_level = models.CharField(max_length=20, choices=LEVEL_CHOICES, default='associate')
-    assigned_to = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tickets'
-    )
+    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tickets')
+    watchers = models.ManyToManyField(User, blank=True, related_name='watched_tickets')
+    tags = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
+    sla_paused_at = models.DateTimeField(null=True, blank=True)
+    sla_pause_seconds = models.IntegerField(default=0)
     raw_email = models.TextField(blank=True)
     sla_hours = models.IntegerField(default=24)
+    merged_into = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='merged_tickets')
+    csat_score = models.IntegerField(null=True, blank=True)  # 1-5
+    escalated = models.BooleanField(default=False)
 
-    def __str__(self):
-        return f"#{self.id} - {self.title}"
+    def __str__(self): return f"#{self.id} - {self.title}"
+
+    @property
+    def sla_deadline(self):
+        base = self.created_at + timezone.timedelta(hours=self.sla_hours)
+        return base + timezone.timedelta(seconds=self.sla_pause_seconds)
 
     @property
     def is_sla_breached(self):
-        if self.status in ['resolved', 'closed']:
-            return False
-        deadline = self.created_at + timezone.timedelta(hours=self.sla_hours)
-        return timezone.now() > deadline
+        if self.status in ['resolved', 'closed']: return False
+        if self.sla_paused_at: return False
+        return timezone.now() > self.sla_deadline
+
+    @property
+    def sla_remaining_seconds(self):
+        delta = self.sla_deadline - timezone.now()
+        return int(delta.total_seconds())
 
     @property
     def resolution_time_hours(self):
         if self.resolved_at:
-            delta = self.resolved_at - self.created_at
-            return round(delta.total_seconds() / 3600, 1)
+            return round((self.resolved_at - self.created_at).total_seconds() / 3600, 1)
         return None
 
-    class Meta:
-        ordering = ['-created_at']
+    @property
+    def tag_list(self):
+        return [t.strip() for t in self.tags.split(',') if t.strip()]
+
+    class Meta: ordering = ['-created_at']
 
 
 class TicketComment(models.Model):
@@ -92,9 +103,24 @@ class TicketComment(models.Model):
     body = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     is_internal = models.BooleanField(default=True)
+    class Meta: ordering = ['created_at']
 
-    def __str__(self):
-        return f"Comment by {self.author.username} on #{self.ticket.id}"
 
-    class Meta:
-        ordering = ['created_at']
+class CannedResponse(models.Model):
+    title = models.CharField(max_length=200)
+    body = models.TextField()
+    category = models.CharField(max_length=30, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    class Meta: ordering = ['title']
+    def __str__(self): return self.title
+
+
+class EscalationRule(models.Model):
+    name = models.CharField(max_length=200)
+    category = models.CharField(max_length=30, blank=True)
+    priority = models.CharField(max_length=20, blank=True)
+    hours_without_update = models.IntegerField(default=4)
+    escalate_to_role = models.CharField(max_length=20, default='senior')
+    is_active = models.BooleanField(default=True)
+    class Meta: ordering = ['name']
+    def __str__(self): return self.name

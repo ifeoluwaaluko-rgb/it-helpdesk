@@ -3,24 +3,31 @@
 {% block content %}
 
 <div class="max-w-3xl mx-auto">
-  <div class="mb-4">
+  <div class="mb-4 flex items-center justify-between">
     <a href="{% url 'article_list' %}" class="text-sm text-gray-400 hover:text-blue-600">← Knowledge Base</a>
+    <div class="flex gap-2">
+      <a href="{% url 'article_history' article.pk %}" class="text-sm text-gray-500 hover:text-blue-600 border border-gray-200 px-3 py-1.5 rounded-lg">🕓 History ({{ article.revisions.count }})</a>
+      <a href="{% url 'edit_article' article.pk %}" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg">✏️ Edit</a>
+    </div>
   </div>
 
   <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-8">
-    <div class="flex items-start justify-between gap-4 mb-6">
-      <div>
+    <div class="mb-6">
+      <div class="flex items-start justify-between gap-4 mb-3">
         <h1 class="text-2xl font-bold text-gray-800">{{ article.title }}</h1>
-        <p class="text-sm text-gray-400 mt-1">
-          {{ article.get_category_display }} ·
-          {{ article.created_at|date:"M d, Y" }} ·
-          By {{ article.created_by.get_full_name|default:article.created_by.username|default:"System" }}
-        </p>
+        <span class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-medium flex-shrink-0">{{ article.get_category_display }}</span>
       </div>
-      <span class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-medium flex-shrink-0 capitalize">{{ article.get_category_display }}</span>
+
+      <!-- Authorship -->
+      <div class="text-xs text-gray-400 space-y-1">
+        <div>📝 Created by <span class="font-medium text-gray-600">{{ article.created_by.get_full_name|default:article.created_by.username|default:"System" }}</span> on {{ article.created_at|date:"M d, Y" }}</div>
+        {% if article.last_modified_by and article.revisions.count > 0 %}
+        <div>✏️ Last modified by <span class="font-medium text-gray-600">{{ article.last_modified_by.get_full_name|default:article.last_modified_by.username }}</span> on {{ article.updated_at|date:"M d, Y H:i" }}</div>
+        {% endif %}
+      </div>
     </div>
 
-    <div class="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap leading-relaxed">{{ article.content }}</div>
+    <div class="text-gray-700 text-sm whitespace-pre-wrap leading-relaxed">{{ article.content }}</div>
 
     {% if article.tag_list %}
     <div class="mt-6 pt-4 border-t border-gray-100 flex flex-wrap gap-2">
@@ -32,11 +39,43 @@
 
     {% if article.source_ticket %}
     <div class="mt-4 pt-4 border-t border-gray-100">
-      <p class="text-xs text-gray-400">
-        Source: <a href="{% url 'ticket_detail' article.source_ticket.pk %}" class="text-blue-500 hover:underline">Ticket #{{ article.source_ticket.id }} – {{ article.source_ticket.title }}</a>
-      </p>
+      <p class="text-xs text-gray-400">Source: <a href="{% url 'ticket_detail' article.source_ticket.pk %}" class="text-blue-500 hover:underline">Ticket #{{ article.source_ticket.id }} – {{ article.source_ticket.title }}</a></p>
     </div>
     {% endif %}
+
+    <!-- Feedback -->
+    <div class="mt-6 pt-6 border-t border-gray-100">
+      <p class="text-sm font-medium text-gray-700 mb-3">Was this article helpful?</p>
+      <div class="flex items-center gap-4">
+        <button onclick="vote(true)" id="btn-helpful"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition
+          {% if user_feedback and user_feedback.helpful %}bg-green-50 border-green-300 text-green-700 font-semibold{% else %}border-gray-200 text-gray-600 hover:border-green-300 hover:text-green-600{% endif %}">
+          👍 Yes <span id="helpful-count" class="font-semibold">{{ article.helpful_count }}</span>
+        </button>
+        <button onclick="vote(false)" id="btn-not-helpful"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition
+          {% if user_feedback and not user_feedback.helpful %}bg-red-50 border-red-300 text-red-700 font-semibold{% else %}border-gray-200 text-gray-600 hover:border-red-300 hover:text-red-600{% endif %}">
+          👎 No <span id="not-helpful-count" class="font-semibold">{{ article.not_helpful_count }}</span>
+        </button>
+      </div>
+    </div>
   </div>
 </div>
+
+<script>
+function vote(helpful) {
+  fetch("{% url 'article_feedback' article.pk %}", {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': '{{ csrf_token }}'},
+    body: 'helpful=' + helpful
+  })
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('helpful-count').textContent = data.helpful;
+    document.getElementById('not-helpful-count').textContent = data.not_helpful;
+    document.getElementById('btn-helpful').className = `flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition ${data.user_vote ? 'bg-green-50 border-green-300 text-green-700 font-semibold' : 'border-gray-200 text-gray-600'}`;
+    document.getElementById('btn-not-helpful').className = `flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition ${!data.user_vote ? 'bg-red-50 border-red-300 text-red-700 font-semibold' : 'border-gray-200 text-gray-600'}`;
+  });
+}
+</script>
 {% endblock %}

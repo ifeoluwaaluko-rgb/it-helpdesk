@@ -1,23 +1,24 @@
 from django.contrib import admin
-from .models import Ticket, TicketComment, Profile
-
+from .models import Ticket, TicketComment, Profile, CannedResponse, EscalationRule
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'role', 'specialization']
-    list_filter = ['role']
-
+    list_display = ['user','role']
 
 class CommentInline(admin.TabularInline):
-    model = TicketComment
-    extra = 0
-    readonly_fields = ['created_at', 'author']
-
+    model = TicketComment; extra = 0
 
 @admin.register(Ticket)
 class TicketAdmin(admin.ModelAdmin):
-    list_display = ['id', 'title', 'status', 'priority', 'category', 'assigned_to', 'created_at']
-    list_filter = ['status', 'priority', 'category', 'required_level']
-    search_fields = ['title', 'description', 'user_email']
+    list_display = ['id','title','status','priority','category','channel','assigned_to','created_at']
+    list_filter = ['status','priority','category','channel']
+    search_fields = ['title','description','user_email']
     inlines = [CommentInline]
-    readonly_fields = ['created_at', 'updated_at', 'resolved_at']
+
+@admin.register(CannedResponse)
+class CannedResponseAdmin(admin.ModelAdmin):
+    list_display = ['title','category']
+
+@admin.register(EscalationRule)
+class EscalationRuleAdmin(admin.ModelAdmin):
+    list_display = ['name','priority','hours_without_update','escalate_to_role','is_active']
