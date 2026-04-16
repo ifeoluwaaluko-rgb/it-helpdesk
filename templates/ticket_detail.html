@@ -1,203 +1,249 @@
 {% extends 'base.html' %}
-{% block title %}Ticket #{{ ticket.id }} – IT Helpdesk{% endblock %}
+{% block title %}#{{ ticket.id }} {{ ticket.title }}{% endblock %}
+{% block breadcrumb %}<a href="{% url 'ticket_list' %}" class="hover:text-[#1f73b7]">Tickets</a> <span class="mx-1">/</span> #{{ ticket.id }}{% endblock %}
 {% block content %}
 
-<div class="mb-4 flex items-center justify-between">
-  <a href="{% url 'ticket_list' %}" class="text-sm text-gray-400 hover:text-blue-600">← All Tickets</a>
-  {% if not ticket.assigned_to %}
-  <form method="post">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="pickup">
-    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-      🙋 Pick Up This Ticket
-    </button>
-  </form>
-  {% elif ticket.assigned_to == request.user and ticket.status == 'open' %}
-  <form method="post">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="update_status">
-    <input type="hidden" name="status" value="in_progress">
-    <button type="submit" class="bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
-      ▶ Start Working
-    </button>
-  </form>
-  {% endif %}
+<!-- Top action bar -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+  <div class="flex items-center gap-2 flex-wrap">
+    {% include 'partials/status_badge.html' with status=ticket.status %}
+    {% include 'partials/priority_badge.html' with priority=ticket.priority %}
+    {% if ticket.is_sla_breached %}<span class="status-badge bg-red-100 text-red-700 animate-pulse">⚠ SLA Breached</span>{% endif %}
+    {% if ticket.channel != 'manual' %}
+    <span class="tag">{% if ticket.channel == 'email' %}📧{% elif ticket.channel == 'walk_in' %}🚶{% elif ticket.channel == 'phone' %}📞{% else %}💬{% endif %} {{ ticket.get_channel_display }}</span>
+    {% endif %}
+  </div>
+  <div class="flex items-center gap-2 flex-wrap">
+    {% if not ticket.assigned_to %}
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="pickup">
+      <button class="zd-btn zd-btn-primary text-xs">🙋 Pick Up</button>
+    </form>
+    {% endif %}
+    <a href="{% url 'ticket_edit' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">✏ Edit</a>
+    <a href="{% url 'ticket_history' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">🕓 History{% if ticket.edit_history.count %} ({{ ticket.edit_history.count }}){% endif %}</a>
+    {% if can_delete %}
+    <a href="{% url 'ticket_delete' ticket.pk %}" class="zd-btn zd-btn-danger text-xs">🗑 Delete</a>
+    {% endif %}
+    {% if ticket.status == 'resolved' %}
+    <a href="{% url 'create_article_from_ticket' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">📚 Save to KB</a>
+    {% endif %}
+  </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-  <!-- Main -->
-  <div class="lg:col-span-2 space-y-6">
+  <!-- LEFT: Main content -->
+  <div class="lg:col-span-2 space-y-4">
 
-    <!-- Header -->
-    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-      <div class="flex items-start justify-between gap-4 mb-4">
-        <div>
-          <h1 class="text-xl font-bold text-gray-800">{{ ticket.title }}</h1>
-          <p class="text-sm text-gray-400 mt-1">Ticket #{{ ticket.id }} · From: {{ ticket.user_email }} · {{ ticket.created_at|date:"M d, Y H:i" }}</p>
-        </div>
-        <div class="flex flex-wrap gap-2 flex-shrink-0">
-          <span class="px-3 py-1 rounded-full text-xs font-semibold
-            {% if ticket.priority == 'critical' %}bg-red-100 text-red-700
-            {% elif ticket.priority == 'high' %}bg-orange-100 text-orange-700
-            {% elif ticket.priority == 'medium' %}bg-yellow-100 text-yellow-700
-            {% else %}bg-gray-100 text-gray-600{% endif %}">{{ ticket.get_priority_display }}</span>
-          <span class="px-3 py-1 rounded-full text-xs font-semibold
-            {% if ticket.status == 'open' %}bg-blue-100 text-blue-700
-            {% elif ticket.status == 'in_progress' %}bg-yellow-100 text-yellow-700
-            {% elif ticket.status == 'resolved' %}bg-green-100 text-green-700
-            {% else %}bg-gray-100 text-gray-600{% endif %}">{{ ticket.get_status_display }}</span>
-          {% if ticket.is_sla_breached %}
-          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 animate-pulse">⚠ SLA Breached</span>
-          {% endif %}
+    <!-- Ticket body -->
+    <div class="zd-card">
+      <div class="px-5 py-4 border-b border-[#e9ebed]">
+        <h1 class="text-base font-bold text-[#2f3941]">{{ ticket.title }}</h1>
+        <div class="flex flex-wrap items-center gap-3 mt-2 text-xs text-[#68737d]">
+          <span>From: <strong class="text-[#2f3941]">{{ ticket.requester_name|default:ticket.user_email }}</strong></span>
+          <span>·</span>
+          <span>{{ ticket.created_at|date:"M d, Y H:i" }}</span>
+          <span>·</span>
+          <span class="capitalize">{{ ticket.category_display }}</span>
         </div>
       </div>
-
-      <!-- SLA Countdown -->
+      <!-- SLA Bar -->
       {% if ticket.status not in 'resolved,closed' %}
-      <div class="mb-4 p-3 rounded-lg {% if ticket.is_sla_breached %}bg-red-50 border border-red-200{% else %}bg-blue-50 border border-blue-100{% endif %}">
-        <div class="flex items-center justify-between text-sm">
-          <span class="{% if ticket.is_sla_breached %}text-red-600{% else %}text-blue-600{% endif %} font-medium">
-            {% if ticket.is_sla_breached %}⏰ SLA Deadline Passed{% else %}⏱ SLA Deadline{% endif %}
+      <div class="px-5 py-3 border-b border-[#e9ebed] {% if ticket.is_sla_breached %}bg-red-50{% else %}bg-blue-50{% endif %}">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-semibold {% if ticket.is_sla_breached %}text-red-600{% else %}text-[#1f73b7]{% endif %}">
+            {% if ticket.is_sla_breached %}⏰ SLA Deadline Passed{% else %}⏱ SLA: {{ ticket.sla_hours }}h target{% endif %}
           </span>
-          <span class="font-semibold {% if ticket.is_sla_breached %}text-red-700{% else %}text-blue-700{% endif %}" id="sla-countdown">
-            {{ ticket.sla_deadline|date:"M d, Y H:i" }}
-          </span>
+          <span class="font-mono font-semibold {% if ticket.is_sla_breached %}text-red-700{% else %}text-[#1f73b7]{% endif %}" id="sla-timer">{{ ticket.sla_deadline|date:"M d, H:i" }}</span>
         </div>
         {% if not ticket.is_sla_breached %}
-        <div class="mt-2 text-xs text-blue-500" id="time-remaining">Calculating...</div>
+        <div class="text-xs text-blue-500 mt-1" id="sla-countdown">Calculating...</div>
         {% endif %}
       </div>
       {% endif %}
-
-      <div class="bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap">{{ ticket.description }}</div>
+      <div class="px-5 py-4">
+        <div class="text-sm text-[#2f3941] leading-relaxed whitespace-pre-wrap">{{ ticket.description }}</div>
+        {% if ticket.tags %}
+        <div class="flex flex-wrap gap-1.5 mt-4">
+          {% for tag in ticket.tag_list %}<span class="tag">{{ tag }}</span>{% endfor %}
+        </div>
+        {% endif %}
+      </div>
     </div>
 
     <!-- Comments -->
-    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-      <h2 class="text-base font-semibold text-gray-700 mb-4">Activity & Notes</h2>
-      {% for comment in comments %}
-      <div class="mb-4 flex gap-3">
-        <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-          {{ comment.author.username|first|upper }}
-        </div>
-        <div class="flex-1">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="text-sm font-semibold text-gray-700">{{ comment.author.get_full_name|default:comment.author.username }}</span>
-            <span class="text-xs text-gray-400">{{ comment.created_at|date:"M d, H:i" }}</span>
-          </div>
-          <div class="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-700">{{ comment.body }}</div>
-        </div>
+    <div class="zd-card">
+      <div class="px-5 py-3 border-b border-[#e9ebed] flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-[#2f3941]">Conversation</h2>
+        <span class="text-xs text-[#68737d]">{{ comments.count }} note{{ comments.count|pluralize }}</span>
       </div>
-      {% empty %}
-      <p class="text-sm text-gray-400 mb-4">No comments yet.</p>
-      {% endfor %}
-
-      <form method="post" class="mt-4 border-t border-gray-100 pt-4">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="comment">
-        <textarea name="body" rows="3" placeholder="Add an internal note..." required
-          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
-        <div class="mt-2 flex justify-end">
-          <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg">Add Note</button>
+      <div class="divide-y divide-[#e9ebed]">
+        {% for comment in comments %}
+        <div class="px-5 py-4 flex gap-3">
+          <div class="w-8 h-8 rounded-full bg-[#1f73b7] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{{ comment.author.username|first|upper }}</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="text-xs font-semibold text-[#2f3941]">{{ comment.author.get_full_name|default:comment.author.username }}</span>
+              <span class="text-xs text-[#68737d]">{{ comment.created_at|date:"M d, H:i" }}</span>
+              {% if comment.is_internal %}<span class="tag text-[10px]">Internal</span>{% endif %}
+            </div>
+            <div class="text-sm text-[#2f3941] leading-relaxed">{{ comment.body }}</div>
+          </div>
         </div>
-      </form>
+        {% empty %}
+        <div class="px-5 py-6 text-sm text-[#68737d] text-center">No notes yet.</div>
+        {% endfor %}
+      </div>
+      <div class="px-5 py-4 border-t border-[#e9ebed] bg-[#f9fafb]">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="comment">
+          <textarea name="body" rows="3" placeholder="Add an internal note..." required
+            class="zd-input resize-none mb-2"></textarea>
+          <div class="flex justify-end">
+            <button type="submit" class="zd-btn zd-btn-primary text-xs">Submit Note</button>
+          </div>
+        </form>
+      </div>
     </div>
 
-    <!-- Related KB Articles -->
+    <!-- Related KB -->
     {% if related_articles %}
-    <div class="bg-white rounded-xl border border-blue-100 shadow-sm p-6">
-      <h2 class="text-base font-semibold text-gray-700 mb-3">💡 Related Knowledge Articles</h2>
-      <ul class="space-y-2">
-        {% for article in related_articles %}
-        <li>
-          <a href="{% url 'article_detail' article.pk %}" class="text-sm text-blue-600 hover:underline font-medium">{{ article.title }}</a>
-          <p class="text-xs text-gray-400">{{ article.content|truncatechars:80 }}</p>
-        </li>
+    <div class="zd-card p-5">
+      <h2 class="text-sm font-semibold text-[#2f3941] mb-3">💡 Suggested Articles</h2>
+      <div class="space-y-2">
+        {% for a in related_articles %}
+        <div class="flex items-start gap-2">
+          <svg class="w-4 h-4 text-[#1f8c8c] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <div><a href="{% url 'article_detail' a.pk %}" class="text-sm text-[#1f73b7] hover:underline font-medium">{{ a.title }}</a><p class="text-xs text-[#68737d]">{{ a.content|truncatechars:70 }}</p></div>
+        </div>
         {% endfor %}
-      </ul>
+      </div>
     </div>
     {% endif %}
   </div>
 
-  <!-- Sidebar -->
+  <!-- RIGHT: Sidebar -->
   <div class="space-y-4">
 
-    <!-- Update Status -->
-    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-      <h3 class="text-sm font-semibold text-gray-700 mb-3">Update Status</h3>
-      <form method="post" class="space-y-2">
+    <!-- Category (editable inline) -->
+    <div class="zd-card p-4">
+      <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Category</h3>
+      <form method="post" id="cat-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_category">
+        <div class="space-y-2">
+          <div>
+            <label class="zd-label">Category</label>
+            <select name="category" id="cat-select" class="zd-select" onchange="loadSubcategories(this.value)">
+              {% for val, label in category_choices %}
+              <option value="{{ val }}" {% if ticket.category == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="zd-label">Subcategory</label>
+            <select name="subcategory" id="subcat-select" class="zd-select" onchange="loadItems(this.value)">
+              <option value="{{ ticket.subcategory }}">{{ ticket.subcategory|default:"— Select —" }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="zd-label">Item</label>
+            <input type="text" name="item" id="item-input" value="{{ ticket.item }}" class="zd-input" placeholder="Specific item...">
+          </div>
+          <button type="submit" class="zd-btn zd-btn-secondary w-full justify-center text-xs">Update Category</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Status & Assign -->
+    <div class="zd-card p-4">
+      <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Status</h3>
+      <form method="post" class="mb-3">
         {% csrf_token %}
         <input type="hidden" name="action" value="update_status">
-        <select name="status" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-          {% for val, label in status_choices %}
-          <option value="{{ val }}" {% if ticket.status == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
+        <select name="status" class="zd-select mb-2">
+          {% for val, label in status_choices %}<option value="{{ val }}" {% if ticket.status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
-        <button type="submit" class="w-full bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold py-2 rounded-lg">Update</button>
+        <button type="submit" class="zd-btn zd-btn-primary w-full justify-center text-xs">Update Status</button>
       </form>
     </div>
 
-    <!-- Reassign -->
-    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-      <h3 class="text-sm font-semibold text-gray-700 mb-1">Assigned To</h3>
-      <p class="text-sm text-gray-600 mb-3">
+    {% if can_assign %}
+    <div class="zd-card p-4">
+      <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Assignee</h3>
+      <p class="text-sm font-medium text-[#2f3941] mb-2">
         {% if ticket.assigned_to %}{{ ticket.assigned_to.get_full_name|default:ticket.assigned_to.username }}
-        {% else %}<span class="text-orange-500 font-medium">Unassigned</span>{% endif %}
+        {% else %}<span class="text-orange-500">Unassigned</span>{% endif %}
       </p>
-      <form method="post" class="space-y-2">
+      <form method="post">
         {% csrf_token %}
         <input type="hidden" name="action" value="reassign">
-        <select name="user_id" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-          <option value="">— Select Staff —</option>
-          {% for u in staff_users %}
-          <option value="{{ u.id }}" {% if ticket.assigned_to.id == u.id %}selected{% endif %}>
-            {{ u.get_full_name|default:u.username }}{% if u.profile.role %} ({{ u.profile.get_role_display }}){% endif %}
-          </option>
-          {% endfor %}
+        <select name="user_id" class="zd-select mb-2">
+          <option value="">— Select staff —</option>
+          {% for u in staff_users %}<option value="{{ u.id }}" {% if ticket.assigned_to.id == u.id %}selected{% endif %}>{{ u.get_full_name|default:u.username }}{% if u.profile.role %} ({{ u.profile.get_role_display }}){% endif %}</option>{% endfor %}
         </select>
-        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 rounded-lg">Reassign</button>
+        <button type="submit" class="zd-btn zd-btn-secondary w-full justify-center text-xs">Reassign</button>
       </form>
     </div>
-
-    <!-- Details -->
-    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-3 text-sm">
-      <h3 class="font-semibold text-gray-700">Details</h3>
-      <div class="flex justify-between"><span class="text-gray-400">Category</span><span class="font-medium">{{ ticket.get_category_display }}</span></div>
-      <div class="flex justify-between"><span class="text-gray-400">Required Level</span><span class="font-medium capitalize">{{ ticket.required_level }}</span></div>
-      <div class="flex justify-between"><span class="text-gray-400">SLA Target</span><span class="font-medium">{{ ticket.sla_hours }}h</span></div>
-      {% if ticket.resolution_time_hours %}
-      <div class="flex justify-between"><span class="text-gray-400">Resolved In</span><span class="font-medium text-green-600">{{ ticket.resolution_time_hours }}h</span></div>
-      {% endif %}
-      <div class="flex justify-between"><span class="text-gray-400">Updated</span><span class="text-gray-500">{{ ticket.updated_at|date:"M d, H:i" }}</span></div>
-    </div>
-
-    {% if ticket.status == 'resolved' %}
-    <a href="{% url 'create_article_from_ticket' ticket.pk %}"
-      class="block w-full text-center bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2.5 rounded-xl transition">
-      📚 Save as Knowledge Article
-    </a>
     {% endif %}
+
+    <!-- Metadata -->
+    <div class="zd-card p-4">
+      <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Details</h3>
+      <dl class="space-y-2 text-xs">
+        <div class="flex justify-between"><dt class="text-[#68737d]">Ticket ID</dt><dd class="font-mono font-semibold">#{{ ticket.id }}</dd></div>
+        <div class="flex justify-between"><dt class="text-[#68737d]">Channel</dt><dd>{{ ticket.get_channel_display }}</dd></div>
+        <div class="flex justify-between"><dt class="text-[#68737d]">Required Level</dt><dd class="capitalize">{{ ticket.required_level }}</dd></div>
+        <div class="flex justify-between"><dt class="text-[#68737d]">SLA Target</dt><dd>{{ ticket.sla_hours }}h</dd></div>
+        {% if ticket.resolution_time_hours %}<div class="flex justify-between"><dt class="text-[#68737d]">Resolved In</dt><dd class="text-green-600 font-semibold">{{ ticket.resolution_time_hours }}h</dd></div>{% endif %}
+        <div class="flex justify-between"><dt class="text-[#68737d]">Created</dt><dd>{{ ticket.created_at|date:"M d, Y" }}</dd></div>
+        <div class="flex justify-between"><dt class="text-[#68737d]">Updated</dt><dd>{{ ticket.updated_at|date:"M d, H:i" }}</dd></div>
+      </dl>
+    </div>
   </div>
 </div>
 
 <script>
-// Live SLA countdown
+const categoryTree = {{ category_tree_json|safe }};
+
+function loadSubcategories(cat, selectedSub) {
+  const sel = document.getElementById('subcat-select');
+  sel.innerHTML = '<option value="">— Select —</option>';
+  const subs = categoryTree[cat]?.subcategories || {};
+  Object.keys(subs).forEach(sub => {
+    const opt = document.createElement('option');
+    opt.value = sub; opt.textContent = sub;
+    if (sub === selectedSub) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function loadItems(sub) {
+  const cat = document.getElementById('cat-select').value;
+  const inp = document.getElementById('item-input');
+  const items = categoryTree[cat]?.subcategories?.[sub] || [];
+  // Suggest first item if empty
+  if (inp.value === '' && items.length) inp.value = items[0] !== 'Other' ? items[0] : '';
+}
+
+// Init
+loadSubcategories('{{ ticket.category }}', '{{ ticket.subcategory }}');
+
+// SLA countdown
 const remaining = {{ ticket.sla_remaining_seconds }};
-const el = document.getElementById('time-remaining');
+const el = document.getElementById('sla-countdown');
 if (el && remaining > 0) {
-  function update() {
-    const now = remaining - Math.floor((Date.now() - pageLoad) / 1000);
-    if (now <= 0) { el.textContent = 'SLA deadline has passed'; el.className = 'mt-2 text-xs text-red-500 font-semibold'; return; }
-    const h = Math.floor(now / 3600);
-    const m = Math.floor((now % 3600) / 60);
-    const s = now % 60;
+  const start = Date.now();
+  function tick() {
+    const left = remaining - Math.floor((Date.now()-start)/1000);
+    if (left <= 0) { el.textContent = 'Deadline has passed'; el.className = 'text-xs text-red-500 font-semibold mt-1'; return; }
+    const h = Math.floor(left/3600), m = Math.floor((left%3600)/60), s = left%60;
     el.textContent = `${h}h ${m}m ${s}s remaining`;
-    if (now < 3600) el.className = 'mt-2 text-xs text-orange-500 font-semibold';
-    setTimeout(update, 1000);
+    if (left < 3600) el.className = 'text-xs text-orange-500 font-semibold mt-1';
+    setTimeout(tick, 1000);
   }
-  const pageLoad = Date.now();
-  update();
+  tick();
 }
 </script>
 {% endblock %}

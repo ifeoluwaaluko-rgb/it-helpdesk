@@ -10,10 +10,10 @@
   </div>
 </div>
 <form method="get" class="card mb-5 flex flex-wrap gap-3 items-end">
-  <div class="flex-1 min-w-40"><label class="block text-xs text-gray-500 mb-1">Search</label><input name="q" value="{{ q|default:'' }}" placeholder="Name or email..." class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></div>
+  <div class="flex-1 min-w-40"><label class="block text-xs text-gray-500 mb-1">Search</label><input name="q" value="{{ q|default:'' }}" placeholder="Name or email..." class="zd-input"></div>
   <div><label class="block text-xs text-gray-500 mb-1">Department</label><select name="dept" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"><option value="">All</option>{% for d in departments %}<option value="{{ d.id }}" {% if selected_dept == d.id|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
-  <button type="submit" class="btn-primary">Filter</button>
-  <a href="{% url 'staff_list' %}" class="btn-secondary">Clear</a>
+  <button type="submit" class="zd-btn zd-btn-primary">Filter</button>
+  <a href="{% url 'staff_list' %}" class="zd-btn zd-btn-secondary">Clear</a>
 </form>
 <div class="card overflow-hidden p-0">
   <div class="overflow-x-auto">

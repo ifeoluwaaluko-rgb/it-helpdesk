@@ -11,6 +11,7 @@ class Profile(models.Model):
     def __str__(self): return f"{self.user.username} ({self.get_role_display()})"
 
 
+# ── 3-Level Category System ──────────────────────────────────────────────────
 class TicketCategory(models.Model):
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=50, unique=True)
@@ -24,14 +25,16 @@ class TicketCategory(models.Model):
 class TicketSubcategory(models.Model):
     category = models.ForeignKey(TicketCategory, on_delete=models.CASCADE, related_name='subcategories')
     name = models.CharField(max_length=100)
-    class Meta:
-        ordering = ['name']
-        unique_together = ('category', 'name')
-    def __str__(self): return f"{self.category.name} > {self.name}"
+    class Meta: ordering = ['name']; unique_together = ('category', 'name')
+    def __str__(self): return f"{self.category.name} → {self.name}"
 
 
 class Ticket(models.Model):
-    STATUS_CHOICES = [('open','Open'),('in_progress','In Progress'),('resolved','Resolved'),('closed','Closed')]
+    STATUS_CHOICES = [
+        ('open','Open'),('in_progress','In Progress'),
+        ('pending','Pending – Awaiting User'),
+        ('resolved','Resolved'),('closed','Closed'),
+    ]
     PRIORITY_CHOICES = [('low','Low'),('medium','Medium'),('high','High'),('critical','Critical')]
     CATEGORY_CHOICES = [
         ('network','Network'),('access','Access / Permissions'),('hardware','Hardware'),
@@ -39,7 +42,10 @@ class Ticket(models.Model):
         ('printer','Printer'),('onboarding','Onboarding'),('other','Other'),
     ]
     LEVEL_CHOICES = [('associate','Associate'),('consultant','Consultant'),('senior','Senior'),('manager','Manager')]
-    CHANNEL_CHOICES = [('email','Email'),('walk_in','Walk-in'),('phone','Phone Call'),('chat','Chat (WhatsApp/Teams/Slack)'),('manual','Manual Entry')]
+    CHANNEL_CHOICES = [
+        ('email','Email'),('walk_in','Walk-in'),
+        ('phone','Phone Call'),('chat','Chat (WhatsApp/Teams/Slack)'),('manual','Manual Entry'),
+    ]
 
     title = models.CharField(max_length=255)
     description = models.TextField()
@@ -47,14 +53,20 @@ class Ticket(models.Model):
     requester_name = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
+
+    # 3-level category
     category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, default='other')
     subcategory = models.CharField(max_length=100, blank=True)
     item = models.CharField(max_length=200, blank=True)
+
     channel = models.CharField(max_length=20, choices=CHANNEL_CHOICES, default='manual')
     required_level = models.CharField(max_length=20, choices=LEVEL_CHOICES, default='associate')
-    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tickets')
+    assigned_to = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tickets'
+    )
     watchers = models.ManyToManyField(User, blank=True, related_name='watched_tickets')
     tags = models.CharField(max_length=255, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
@@ -62,8 +74,10 @@ class Ticket(models.Model):
     sla_pause_seconds = models.IntegerField(default=0)
     raw_email = models.TextField(blank=True)
     sla_hours = models.IntegerField(default=24)
-    merged_into = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='merged_tickets')
-    csat_score = models.IntegerField(null=True, blank=True)  # 1-5
+    merged_into = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='merged_tickets'
+    )
+    csat_score = models.IntegerField(null=True, blank=True)
     escalated = models.BooleanField(default=False)
 
     def __str__(self): return f"#{self.id} - {self.title}"
@@ -81,8 +95,7 @@ class Ticket(models.Model):
 
     @property
     def sla_remaining_seconds(self):
-        delta = self.sla_deadline - timezone.now()
-        return int(delta.total_seconds())
+        return int((self.sla_deadline - timezone.now()).total_seconds())
 
     @property
     def resolution_time_hours(self):
@@ -94,7 +107,33 @@ class Ticket(models.Model):
     def tag_list(self):
         return [t.strip() for t in self.tags.split(',') if t.strip()]
 
+    @property
+    def category_display(self):
+        parts = [self.get_category_display()]
+        if self.subcategory: parts.append(self.subcategory)
+        if self.item: parts.append(self.item)
+        return ' → '.join(parts)
+
     class Meta: ordering = ['-created_at']
+
+
+class TicketEditHistory(models.Model):
+    """Snapshot saved every time a ticket is edited."""
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='edit_history')
+    edited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    edited_at = models.DateTimeField(auto_now_add=True)
+    # Snapshot of fields before edit
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    category = models.CharField(max_length=30)
+    subcategory = models.CharField(max_length=100, blank=True)
+    item = models.CharField(max_length=200, blank=True)
+    priority = models.CharField(max_length=20)
+    status = models.CharField(max_length=20)
+    edit_note = models.CharField(max_length=255, blank=True)
+
+    class Meta: ordering = ['-edited_at']
+    def __str__(self): return f"Edit of #{self.ticket.id} by {self.edited_by} at {self.edited_at}"
 
 
 class TicketComment(models.Model):

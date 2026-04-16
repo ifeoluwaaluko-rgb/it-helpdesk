@@ -1,64 +1,53 @@
 {% extends 'base.html' %}
 {% block title %}New Ticket{% endblock %}
+{% block breadcrumb %}<a href="{% url 'ticket_list' %}">Tickets</a> / New{% endblock %}
 {% block content %}
-<div class="max-w-2xl mx-auto">
-  <div class="mb-6">
-    <h1 class="text-xl font-bold text-gray-900">Create New Ticket</h1>
-    <p class="text-sm text-gray-500 mt-1">Ticket will be auto-classified and assigned.</p>
-  </div>
-
-  <div class="card">
-    <form method="post" class="space-y-5">
+<div class="max-w-2xl">
+  <h1 class="text-lg font-bold text-[#2f3941] mb-4">Create Ticket</h1>
+  <div class="zd-card p-6">
+    <form method="post" class="space-y-4">
       {% csrf_token %}
 
-      <!-- Staff member search -->
+      <!-- Staff search -->
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Requester <span class="text-red-500">*</span></label>
+        <label class="zd-label">Requester <span class="text-red-500">*</span></label>
         <div class="relative">
           <input type="text" id="staff-search" placeholder="Search by name or email..."
-            autocomplete="off"
-            class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-          <div id="staff-dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded-xl shadow-lg mt-1 hidden max-h-48 overflow-y-auto"></div>
+            autocomplete="off" class="zd-input pr-8">
+          <div id="staff-dropdown" class="absolute z-20 w-full bg-white border border-[#d8dcde] rounded-md shadow-lg mt-1 hidden max-h-52 overflow-y-auto"></div>
         </div>
         <input type="hidden" id="staff-id" name="staff_member">
-        <input type="email" id="user-email-hidden" name="user_email" required class="hidden">
-        <p id="selected-staff" class="text-xs text-blue-600 mt-1 hidden"></p>
-        <p class="text-xs text-gray-400 mt-1">Or type an email directly if not in directory:</p>
-        <input type="email" id="user-email-manual" placeholder="staff@company.com"
-          class="mt-1 w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <p id="selected-staff" class="text-xs text-[#1f8c8c] mt-1 hidden font-medium"></p>
+        <p class="text-xs text-[#68737d] mt-1">Or enter email manually if not in directory:</p>
+        <input type="email" id="email-manual" name="user_email" placeholder="staff@company.com" class="zd-input mt-1">
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Channel</label>
-        <select name="channel" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-          {% for val, label in ticket.CHANNEL_CHOICES|default:"" %}
-          <option value="{{ val }}">{{ label }}</option>
-          {% empty %}
-          <option value="walk_in">Walk-in</option>
-          <option value="phone">Phone Call</option>
-          <option value="chat">Chat (WhatsApp/Teams/Slack)</option>
-          <option value="manual">Manual Entry</option>
-          {% endfor %}
+        <label class="zd-label">Channel</label>
+        <select name="channel" class="zd-select">
+          {% for val, label in channel_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
         </select>
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Issue Title <span class="text-red-500">*</span></label>
-        <input name="title" type="text" required placeholder="e.g. Cannot connect to VPN"
-          class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <label class="zd-label">Subject <span class="text-red-500">*</span></label>
+        <input name="title" type="text" required placeholder="e.g. Cannot connect to VPN" class="zd-input">
+        <p class="text-xs text-[#68737d] mt-1">Be specific — this helps classification accuracy.</p>
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1.5">Description <span class="text-red-500">*</span></label>
-        <textarea name="description" rows="5" required placeholder="Describe the issue in detail..."
-          class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+        <label class="zd-label">Description <span class="text-red-500">*</span></label>
+        <textarea name="description" rows="5" required placeholder="Describe the issue in detail..." class="zd-input resize-none"></textarea>
       </div>
 
-      <div class="flex gap-3 pt-1">
-        <button type="submit" class="btn-primary flex-1 sm:flex-none text-center">Create & Assign Ticket</button>
-        <a href="{% url 'ticket_list' %}" class="btn-secondary">Cancel</a>
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="zd-btn zd-btn-primary">Create Ticket</button>
+        <a href="{% url 'ticket_list' %}" class="zd-btn zd-btn-secondary">Cancel</a>
       </div>
     </form>
+  </div>
+  <div class="mt-3 text-xs text-[#68737d] bg-[#f3f4f6] rounded px-4 py-3 border border-[#d8dcde]">
+    💡 The ticket will be automatically classified and assigned based on the subject and description.
   </div>
 </div>
 
@@ -66,8 +55,7 @@
 const searchInput = document.getElementById('staff-search');
 const dropdown = document.getElementById('staff-dropdown');
 const staffId = document.getElementById('staff-id');
-const emailHidden = document.getElementById('user-email-hidden');
-const emailManual = document.getElementById('user-email-manual');
+const emailInput = document.getElementById('email-manual');
 const selectedLabel = document.getElementById('selected-staff');
 let debounce;
 
@@ -83,14 +71,13 @@ searchInput.addEventListener('input', () => {
         if (!data.results.length) { dropdown.classList.add('hidden'); return; }
         data.results.forEach(m => {
           const div = document.createElement('div');
-          div.className = 'px-4 py-2.5 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-50 last:border-0';
-          div.innerHTML = `<p class="font-medium text-gray-800">${m.name}</p><p class="text-xs text-gray-500">${m.email}${m.department ? ' · '+m.department : ''}</p>`;
+          div.className = 'px-4 py-3 hover:bg-[#f3f4f6] cursor-pointer text-sm border-b border-[#e9ebed] last:border-0';
+          div.innerHTML = `<p class="font-medium text-[#2f3941]">${m.name}</p><p class="text-xs text-[#68737d]">${m.email}${m.department ? ' · '+m.department : ''}</p>`;
           div.onclick = () => {
             staffId.value = m.id;
-            emailHidden.value = m.email;
-            emailManual.value = '';
+            emailInput.value = m.email;
             searchInput.value = m.name;
-            selectedLabel.textContent = `✓ ${m.name} (${m.email})`;
+            selectedLabel.textContent = `✓ ${m.name} — ${m.email}`;
             selectedLabel.classList.remove('hidden');
             dropdown.classList.add('hidden');
           };
@@ -101,17 +88,9 @@ searchInput.addEventListener('input', () => {
   }, 200);
 });
 
-// Manual email overrides staff selection
-emailManual.addEventListener('input', () => {
-  if (emailManual.value) {
-    emailHidden.value = emailManual.value;
-    staffId.value = '';
-    selectedLabel.classList.add('hidden');
-  }
-});
-
 document.addEventListener('click', e => {
-  if (!e.target.closest('#staff-search') && !e.target.closest('#staff-dropdown')) dropdown.classList.add('hidden');
+  if (!e.target.closest('#staff-search') && !e.target.closest('#staff-dropdown'))
+    dropdown.classList.add('hidden');
 });
 </script>
 {% endblock %}

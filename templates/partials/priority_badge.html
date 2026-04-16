@@ -1,0 +1,4 @@
+{% if priority == 'critical' %}<span class="status-badge bg-red-100 text-red-700"><span class="priority-dot bg-red-500"></span>Critical</span>
+{% elif priority == 'high' %}<span class="status-badge bg-orange-100 text-orange-700"><span class="priority-dot bg-orange-500"></span>High</span>
+{% elif priority == 'medium' %}<span class="status-badge bg-yellow-100 text-yellow-700"><span class="priority-dot bg-yellow-500"></span>Medium</span>
+{% else %}<span class="status-badge bg-gray-100 text-[#68737d]"><span class="priority-dot bg-gray-400"></span>Low</span>{% endif %}

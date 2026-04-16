@@ -7,12 +7,16 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-helpdesk-dev-key-chan
 DEBUG = os.environ.get('DEBUG', 'False').strip().lower() == 'true'
 
 ALLOWED_HOSTS = [
-    "web-production-a03c9.up.railway.app",
+    'web-production-a03c9.up.railway.app',
+    '127.0.0.1',
+    'localhost',
+    '*',
 ]
+
 CSRF_TRUSTED_ORIGINS = [
-    "https://web-production-a03c9.up.railway.app",
-    "https://*.railway.app",
-    "https://*.up.railway.app",
+    'https://web-production-a03c9.up.railway.app',
+    'https://*.railway.app',
+    'https://*.up.railway.app',
 ]
 
 INSTALLED_APPS = [
@@ -59,7 +63,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'helpdesk.wsgi.application'
 
-# Database — uses PostgreSQL on Railway, SQLite locally
 DATABASE_URL = os.environ.get('DATABASE_URL')
 if DATABASE_URL:
     import urllib.parse as urlparse
@@ -72,6 +75,7 @@ if DATABASE_URL:
             'PASSWORD': url.password,
             'HOST': url.hostname,
             'PORT': url.port,
+            'CONN_MAX_AGE': 60,
         }
     }
 else:
@@ -98,14 +102,14 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/login/'
 
-# IMAP Email Settings
+# IMAP
 IMAP_HOST = os.environ.get('IMAP_HOST', 'imap.gmail.com')
 IMAP_PORT = int(os.environ.get('IMAP_PORT', 993))
 IMAP_USER = os.environ.get('IMAP_USER', 'it@yourcompany.com')
 IMAP_PASSWORD = os.environ.get('IMAP_PASSWORD', '')
 IMAP_FOLDER = 'INBOX'
 
-# Email (SMTP) — set via environment variables
+# SMTP
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
@@ -113,3 +117,6 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'IT Helpdesk <noreply@helpdesk.com>')
+
+# Performance
+CONN_MAX_AGE = 60
