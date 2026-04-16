@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Import Assets{% endblock %}
+{% block content %}
+<div class="max-w-xl mx-auto">
+  <div class="mb-5"><a href="{% url 'asset_list' %}" class="text-sm text-gray-400">← Assets</a><h1 class="text-xl font-bold text-gray-900 mt-2">Bulk Import Assets</h1></div>
+  <div class="card">
+    <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-5 text-sm text-blue-700">
+      <p class="font-semibold mb-1">📋 CSV Format:</p>
+      <code class="text-xs">asset_id, name, category, brand, model, serial_number, location, status</code><br>
+      <a href="{% url 'asset_template' %}" class="underline mt-2 inline-block">⬇ Download template</a>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
+      {% csrf_token %}
+      <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Upload CSV</label><input type="file" name="file" accept=".csv" required class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm"></div>
+      <div class="flex gap-3"><button type="submit" class="btn-primary">Import</button><a href="{% url 'asset_list' %}" class="btn-secondary">Cancel</a></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -106,3 +106,58 @@ print(f"✅ Created {len(articles)} knowledge articles")
 print("\n🎉 Seed complete! Login credentials:")
 for username, password, first, last, role in users_data:
     print(f"   {role:<12} → username: {username:<15} password: {password}")
+
+# ── Staff Directory ─────────────────────────────────────────────────────────────
+from directory.models import Department, StaffMember
+
+depts = {}
+for name in ['Engineering','Finance','HR','Marketing','Operations','Sales']:
+    d, _ = Department.objects.get_or_create(name=name)
+    depts[name] = d
+
+dir_staff = [
+    ('John','Doe','john.doe@company.com','+2348001000001','Engineering','Senior Developer'),
+    ('Mary','Jones','mary.jones@company.com','+2348001000002','HR','HR Manager'),
+    ('Peter','Smith','peter.smith@company.com','+2348001000003','Finance','Finance Manager'),
+    ('Fatima','Musa','fatima.musa@company.com','+2348001000004','Marketing','Brand Manager'),
+    ('Emeka','Obi','emeka.obi@company.com','+2348001000005','Operations','Operations Lead'),
+    ('Aisha','Balogun','aisha.balogun@company.com','+2348001000006','Engineering','Frontend Dev'),
+    ('Tola','Adebayo','tola.adebayo@company.com','+2348001000007','Sales','Sales Rep'),
+    ('Chidi','Obi','chidi.obi@company.com','+2348001000008','Engineering','New Hire'),
+]
+for fn, ln, email, phone, dept, title in dir_staff:
+    StaffMember.objects.get_or_create(email=email, defaults={
+        'first_name':fn,'last_name':ln,'phone':phone,
+        'department':depts[dept],'job_title':title
+    })
+print(f"✅ Created {len(dir_staff)} staff directory entries")
+
+# ── Asset Categories + Sample Assets ────────────────────────────────────────────
+from assets.models import AssetCategory, Asset, AssetHistory
+from django.contrib.auth.models import User
+
+admin_user = User.objects.filter(is_staff=True).first()
+cats = {}
+for name, icon in [('Computers','💻'),('Printers','🖨️'),('Network Devices','🌐'),('Mobile Devices','📱'),('Software','📦'),('SIM Cards','📶')]:
+    c, _ = AssetCategory.objects.get_or_create(name=name, defaults={'icon':icon})
+    cats[name] = c
+
+sample_assets = [
+    ('LAPTOP-001','Dell XPS 15','Computers','Dell','XPS 15','SN-DX001','Floor 2','active','john.doe@company.com'),
+    ('LAPTOP-002','MacBook Pro 14','Computers','Apple','MacBook Pro','SN-MB002','Floor 1','active','aisha.balogun@company.com'),
+    ('PRINTER-001','HP LaserJet Pro','Printers','HP','LaserJet Pro 400','SN-HP001','3rd Floor','active',None),
+    ('SWITCH-001','Cisco 24-Port Switch','Network Devices','Cisco','Catalyst 2960','SN-CS001','Server Room','active',None),
+    ('PHONE-001','Samsung Galaxy A54','Mobile Devices','Samsung','Galaxy A54','SN-SG001','Reception','active','mary.jones@company.com'),
+    ('LAPTOP-003','Lenovo ThinkPad','Computers','Lenovo','ThinkPad X1','SN-LN003','Floor 3','faulty',None),
+]
+for aid, name, cat_name, brand, model, serial, location, status, owner_email in sample_assets:
+    owner = StaffMember.objects.filter(email=owner_email).first() if owner_email else None
+    asset, created = Asset.objects.get_or_create(asset_id=aid, defaults={
+        'name':name,'category':cats.get(cat_name),'brand':brand,'model':model,
+        'serial_number':serial,'location':location,'status':status,
+        'assigned_to':owner,'created_by':admin_user
+    })
+    if created:
+        AssetHistory.objects.create(asset=asset,changed_by=admin_user,change_type='Registered',new_value='Asset created via seed')
+
+print(f"✅ Created {len(sample_assets)} sample assets")

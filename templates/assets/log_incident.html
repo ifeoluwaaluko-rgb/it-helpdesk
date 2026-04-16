@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Log Incident – {{ asset.name }}{% endblock %}
+{% block content %}
+<div class="max-w-xl mx-auto">
+  <div class="mb-5"><a href="{% url 'asset_detail' asset.pk %}" class="text-sm text-gray-400">← {{ asset.name }}</a><h1 class="text-xl font-bold text-gray-900 mt-2">Log Hardware Incident</h1><p class="text-sm text-gray-500">Asset: {{ asset.asset_id }} — {{ asset.name }}</p></div>
+  <div class="card">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Incident Title <span class="text-red-500">*</span></label><input name="title" required placeholder="e.g. Screen cracked after drop" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></div>
+      <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Severity</label><select name="severity" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">{% for val, label in severity_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}</select></div>
+      <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Description</label><textarea name="description" rows="4" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea></div>
+      <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Linked Ticket (optional)</label><select name="ticket_id" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"><option value="">— None —</option>{% for t in tickets %}<option value="{{ t.id }}">#{{ t.id }} {{ t.title|truncatechars:50 }}</option>{% endfor %}</select></div>
+      <div class="flex gap-3"><button type="submit" class="btn-primary">Log Incident</button><a href="{% url 'asset_detail' asset.pk %}" class="btn-secondary">Cancel</a></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

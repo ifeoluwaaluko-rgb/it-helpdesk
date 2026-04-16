@@ -7,4 +7,6 @@ urlpatterns = [
     path('', lambda r: redirect('dashboard')),
     path('', include('tickets.urls')),
     path('', include('knowledge.urls')),
+    path('', include('directory.urls')),
+    path('', include('assets.urls')),
 ]
