@@ -113,7 +113,7 @@
 <div class="flex items-center justify-between mb-5">
   <div>
     <h1 class="text-lg font-bold text-[#2f3941]">My Workspace</h1>
-    <p class="text-xs text-[#68737d] mt-0.5">{{ user.get_full_name|default:user.username }} · {{ user.profile.get_role_display }}</p>
+    <p class="text-xs text-[#68737d] mt-0.5">{{ user.get_full_name|default:user.username }} · {{ role_display }}</p>
   </div>
 </div>
 

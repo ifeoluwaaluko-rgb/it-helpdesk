@@ -43,6 +43,30 @@ class Article(models.Model):
         ordering = ['-updated_at']
 
 
+class ArticleAttachment(models.Model):
+    """File/image attached to a knowledge base article."""
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='knowledge/attachments/')
+    filename = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    is_image = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        if not self.filename and self.file:
+            self.filename = self.file.name.split('/')[-1]
+        import mimetypes
+        mime, _ = mimetypes.guess_type(self.filename or '')
+        self.is_image = bool(mime and mime.startswith('image/'))
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.filename} → {self.article.title}"
+
+    class Meta:
+        ordering = ['uploaded_at']
+
+
 class ArticleRevision(models.Model):
     """Snapshot saved every time an article is edited."""
     article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name='revisions')

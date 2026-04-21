@@ -69,7 +69,7 @@ tailwind.config = {
         <div class="w-7 h-7 rounded-full bg-[#1f8c8c] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{{ user.username|first|upper }}</div>
         <div class="min-w-0">
           <p class="text-white text-xs font-semibold truncate">{{ user.get_full_name|default:user.username }}</p>
-          <p class="text-[#8d9ba4] text-xs">{% if user.profile.role %}{{ user.profile.get_role_display }}{% endif %}</p>
+          <p class="text-[#8d9ba4] text-xs">{% if role %}{{ role|title }}{% endif %}</p>
         </div>
       </div>
     </div>

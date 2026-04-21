@@ -18,10 +18,16 @@ def asset_list(request):
     if cat: assets = assets.filter(category_id=cat)
     if status: assets = assets.filter(status=status)
     categories = AssetCategory.objects.all()
-    total = assets.count()
+    all_assets_qs = Asset.objects.all()
+    total_all = all_assets_qs.count()
+    total_filtered = assets.count()
+    status_summary = [(val, label, all_assets_qs.filter(status=val).count()) for val, label in Asset.STATUS_CHOICES]
     return render(request,'assets/asset_list.html',{
-        'assets':assets,'categories':categories,'total':total,
+        'assets':assets,'categories':categories,
+        'total': total_all, 'total_filtered': total_filtered,
         'status_choices':Asset.STATUS_CHOICES,'q':q,'sel_cat':cat,'sel_status':status,
+        'status_summary': status_summary,
+        'is_filtered': bool(q or cat or status),
     })
 
 @login_required

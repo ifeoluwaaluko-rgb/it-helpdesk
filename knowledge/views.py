@@ -3,8 +3,23 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from .models import Article, ArticleRevision, ArticleFeedback
+from .models import Article, ArticleRevision, ArticleFeedback, ArticleAttachment
 from tickets.models import Ticket
+
+
+def _get_role(user):
+    try:
+        return user.profile.role
+    except Exception:
+        return 'associate'
+
+
+def _can_delete_article(user, article):
+    """Manager, Consultant, Senior can delete any article. Others only their own."""
+    role = _get_role(user)
+    if role in ('manager', 'consultant', 'senior'):
+        return True
+    return article.created_by == user
 
 
 @login_required
@@ -32,10 +47,26 @@ def article_detail(request, pk):
         user_feedback = ArticleFeedback.objects.get(article=article, user=request.user)
     except ArticleFeedback.DoesNotExist:
         pass
+    can_delete = _can_delete_article(request.user, article)
     return render(request, 'knowledge/article_detail.html', {
         'article': article,
         'user_feedback': user_feedback,
+        'can_delete': can_delete,
     })
+
+
+@login_required
+def article_delete(request, pk):
+    article = get_object_or_404(Article, pk=pk)
+    if not _can_delete_article(request.user, article):
+        messages.error(request, 'You do not have permission to delete this article.')
+        return redirect('article_detail', pk=pk)
+    if request.method == 'POST':
+        title = article.title
+        article.delete()
+        messages.success(request, f'Article "{title}" deleted.')
+        return redirect('article_list')
+    return render(request, 'knowledge/article_confirm_delete.html', {'article': article})
 
 
 @login_required
@@ -52,9 +83,6 @@ def article_history(request, pk):
 def revision_detail(request, pk, rev_pk):
     article = get_object_or_404(Article, pk=pk)
     revision = get_object_or_404(ArticleRevision, pk=rev_pk, article=article)
-    # Simple line-by-line diff
-    current_lines = article.content.splitlines()
-    rev_lines = revision.content.splitlines()
     return render(request, 'knowledge/revision_detail.html', {
         'article': article,
         'revision': revision,
@@ -84,7 +112,6 @@ def create_article(request, ticket_id=None):
                 last_modified_by=request.user,
                 source_ticket_id=source_id if source_id else None,
             )
-            # Save initial revision
             ArticleRevision.objects.create(
                 article=article,
                 title=title,
@@ -94,6 +121,13 @@ def create_article(request, ticket_id=None):
                 edited_by=request.user,
                 revision_note='Initial version',
             )
+            for f in request.FILES.getlist('attachments'):
+                ArticleAttachment.objects.create(
+                    article=article,
+                    file=f,
+                    filename=f.name,
+                    uploaded_by=request.user,
+                )
             messages.success(request, f'Article "{article.title}" saved to knowledge base.')
             return redirect('article_detail', pk=article.pk)
 
@@ -115,7 +149,6 @@ def edit_article(request, pk):
         revision_note = request.POST.get('revision_note', '').strip()
 
         if title and content:
-            # Save snapshot BEFORE applying changes
             ArticleRevision.objects.create(
                 article=article,
                 title=article.title,
@@ -125,19 +158,29 @@ def edit_article(request, pk):
                 edited_by=request.user,
                 revision_note=revision_note or 'No note provided',
             )
-            # Apply changes
             article.title = title
             article.content = content
             article.category = category
             article.tags = tags
             article.last_modified_by = request.user
             article.save()
+            for f in request.FILES.getlist('attachments'):
+                ArticleAttachment.objects.create(
+                    article=article,
+                    file=f,
+                    filename=f.name,
+                    uploaded_by=request.user,
+                )
+            delete_ids = request.POST.getlist('delete_attachments')
+            if delete_ids:
+                ArticleAttachment.objects.filter(pk__in=delete_ids, article=article).delete()
             messages.success(request, 'Article updated successfully.')
             return redirect('article_detail', pk=article.pk)
 
     return render(request, 'knowledge/edit_article.html', {
         'article': article,
         'category_choices': Article.CATEGORY_CHOICES,
+        'attachments': article.attachments.all(),
     })
 
 
@@ -154,7 +197,6 @@ def article_feedback(request, pk):
     )
 
     if not created:
-        # User is changing their vote
         if feedback.helpful and not helpful:
             article.helpful_count = max(0, article.helpful_count - 1)
             article.not_helpful_count += 1
