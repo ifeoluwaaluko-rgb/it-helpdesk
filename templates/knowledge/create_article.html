@@ -2,7 +2,7 @@
 {% block title %}New Knowledge Article – IT Helpdesk{% endblock %}
 {% block content %}
 
-<div class="max-w-2xl mx-auto">
+<div class="max-w-3xl mx-auto">
   <div class="mb-6">
     <h1 class="text-2xl font-bold text-gray-800">Save Knowledge Article</h1>
     {% if ticket %}
@@ -13,9 +13,10 @@
   </div>
 
   <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-8">
-    <form method="post" class="space-y-5">
+    <form method="post" enctype="multipart/form-data" class="space-y-5" id="article-form">
       {% csrf_token %}
       {% if ticket %}<input type="hidden" name="source_ticket" value="{{ ticket.pk }}">{% endif %}
+      <input type="hidden" name="content" id="content-hidden">
 
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Article Title <span class="text-red-500">*</span></label>
@@ -35,13 +36,35 @@
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Solution / Content <span class="text-red-500">*</span></label>
-        <textarea name="content" rows="8" required
-          placeholder="Step-by-step solution, workaround, or explanation..."
-          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none">{% if ticket %}Problem: {{ ticket.description }}
-
-Solution:
-{% endif %}</textarea>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Content <span class="text-red-500">*</span></label>
+        <!-- Quill toolbar -->
+        <div id="editor-toolbar" class="border border-gray-200 border-b-0 rounded-t-lg bg-gray-50 px-2 py-1 flex flex-wrap gap-1 items-center">
+          <button type="button" class="ql-btn font-bold text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="bold" title="Bold">B</button>
+          <button type="button" class="ql-btn italic text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="italic" title="Italic">I</button>
+          <button type="button" class="ql-btn underline text-xs px-2 py-1 rounded hover:bg-gray-200 underline" data-cmd="underline" title="Underline">U</button>
+          <div class="w-px h-5 bg-gray-300 mx-1"></div>
+          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="insertUnorderedList" title="Bullet List">• List</button>
+          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="insertOrderedList" title="Numbered List">1. List</button>
+          <div class="w-px h-5 bg-gray-300 mx-1"></div>
+          <select id="heading-select" class="text-xs border border-gray-200 rounded px-1 py-1 focus:outline-none">
+            <option value="">Paragraph</option>
+            <option value="h2">Heading 2</option>
+            <option value="h3">Heading 3</option>
+          </select>
+          <div class="w-px h-5 bg-gray-300 mx-1"></div>
+          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-gray-200" onclick="insertLink()" title="Link">🔗 Link</button>
+          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-blue-100 text-blue-700 font-medium" onclick="document.getElementById('inline-img-input').click()" title="Embed image in text">🖼 Inline Image</button>
+          <input type="file" id="inline-img-input" accept="image/*" class="hidden" onchange="embedInlineImage(this)">
+        </div>
+        <!-- Editable area -->
+        <div id="editor-area"
+          contenteditable="true"
+          class="border border-gray-200 rounded-b-lg px-4 py-3 text-sm text-gray-800 min-h-[240px] focus:outline-none focus:ring-2 focus:ring-blue-400 prose prose-sm max-w-none"
+          style="line-height:1.7"
+          {% if ticket %}
+          {% endif %}
+        >{% if ticket %}<p><strong>Problem:</strong> {{ ticket.description }}</p><p><strong>Solution:</strong></p>{% endif %}</div>
+        <p class="text-xs text-gray-400 mt-1">Use the toolbar to format text. Click "🖼 Inline Image" to embed an image directly in the content.</p>
       </div>
 
       <div>
@@ -51,8 +74,19 @@ Solution:
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
       </div>
 
+      <!-- File attachments -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Attachments <span class="text-gray-400 font-normal">(images, PDFs, docs — any file)</span></label>
+        <div id="drop-zone" class="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-blue-300 transition cursor-pointer" onclick="document.getElementById('file-input').click()">
+          <p class="text-sm text-gray-400">📎 Click to browse or drag files here</p>
+          <p class="text-xs text-gray-300 mt-1">Images, PDFs, Word docs, etc.</p>
+        </div>
+        <input type="file" id="file-input" name="attachments" multiple class="hidden" onchange="updateFileList(this)">
+        <ul id="file-list" class="mt-2 space-y-1 text-sm text-gray-600"></ul>
+      </div>
+
       <div class="flex gap-3 pt-2">
-        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition">
+        <button type="submit" onclick="syncContent()" class="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition">
           📚 Save Article
         </button>
         <a href="{% url 'article_list' %}" class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2.5">Cancel</a>
@@ -60,4 +94,75 @@ Solution:
     </form>
   </div>
 </div>
+
+<script>
+// Toolbar commands
+document.querySelectorAll('.ql-btn[data-cmd]').forEach(btn => {
+  btn.addEventListener('mousedown', e => {
+    e.preventDefault();
+    document.execCommand(btn.dataset.cmd, false, null);
+    document.getElementById('editor-area').focus();
+  });
+});
+
+document.getElementById('heading-select').addEventListener('change', function() {
+  document.getElementById('editor-area').focus();
+  if (this.value) {
+    document.execCommand('formatBlock', false, this.value);
+  } else {
+    document.execCommand('formatBlock', false, 'p');
+  }
+  this.value = '';
+});
+
+function insertLink() {
+  const url = prompt('Enter URL:');
+  if (url) document.execCommand('createLink', false, url);
+}
+
+function syncContent() {
+  document.getElementById('content-hidden').value = document.getElementById('editor-area').innerHTML;
+}
+
+// Inline image embed into editor
+function embedInlineImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = `<img src="${e.target.result}" style="max-width:100%;border-radius:8px;margin:8px 0;" alt="embedded image">`;
+    document.getElementById('editor-area').focus();
+    document.execCommand('insertHTML', false, img);
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+// File attachment list preview
+function updateFileList(input) {
+  const list = document.getElementById('file-list');
+  list.innerHTML = '';
+  Array.from(input.files).forEach(f => {
+    const li = document.createElement('li');
+    li.className = 'flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5 text-xs';
+    li.innerHTML = `<span class="text-gray-500">${f.type.startsWith('image/') ? '🖼' : '📄'}</span> <span class="font-medium">${f.name}</span> <span class="text-gray-400">(${(f.size/1024).toFixed(1)} KB)</span>`;
+    list.appendChild(li);
+  });
+}
+
+// Drag-and-drop on drop zone
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('border-blue-400','bg-blue-50'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('border-blue-400','bg-blue-50'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('border-blue-400','bg-blue-50');
+  const fi = document.getElementById('file-input');
+  fi.files = e.dataTransfer.files;
+  updateFileList(fi);
+});
+
+// Ensure content is synced on submit
+document.getElementById('article-form').addEventListener('submit', syncContent);
+</script>
 {% endblock %}

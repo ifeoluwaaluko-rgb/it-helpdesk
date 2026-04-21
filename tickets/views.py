@@ -187,23 +187,29 @@ def ticket_detail(request, pk):
             messages.success(request, f'You picked up ticket #{ticket.id}.')
 
         elif action == 'update_status':
-            new_status = request.POST.get('status')
-            old_status = ticket.status
-            ticket.status = new_status
-            if new_status == 'resolved' and not ticket.resolved_at:
-                ticket.resolved_at = timezone.now()
-            ticket.save()
-            if new_status != old_status:
-                notify_status_change(ticket, request.user)
+            new_status = request.POST.get('status', '').strip()
+            valid_statuses = [s for s, _ in Ticket.STATUS_CHOICES]
+            if new_status and new_status in valid_statuses:
+                old_status = ticket.status
+                ticket.status = new_status
+                if new_status == 'resolved' and not ticket.resolved_at:
+                    ticket.resolved_at = timezone.now()
+                ticket.save()
+                if new_status != old_status:
+                    notify_status_change(ticket, request.user)
 
         elif action == 'reassign' and can_assign(request.user):
-            uid = request.POST.get('user_id')
+            uid = request.POST.get('user_id', '').strip()
             if uid:
-                old = ticket.assigned_to
-                ticket.assigned_to_id = int(uid)
-                ticket.save()
-                if ticket.assigned_to and (not old or old.id != ticket.assigned_to.id):
-                    notify_assignment(ticket, ticket.assigned_to)
+                try:
+                    old = ticket.assigned_to
+                    ticket.assigned_to_id = int(uid)
+                    ticket.save()
+                    ticket.refresh_from_db()
+                    if ticket.assigned_to and (not old or old.id != ticket.assigned_to.id):
+                        notify_assignment(ticket, ticket.assigned_to)
+                except (ValueError, User.DoesNotExist):
+                    messages.error(request, 'Invalid staff selection.')
 
         elif action == 'update_category':
             # Save snapshot before changing
@@ -245,27 +251,39 @@ def ticket_edit(request, pk):
     role = get_role(request.user)
 
     if request.method == 'POST':
-        edit_note = request.POST.get('edit_note','').strip()
-        # Save snapshot BEFORE applying changes
-        TicketEditHistory.objects.create(
-            ticket=ticket, edited_by=request.user,
-            title=ticket.title, description=ticket.description,
-            category=ticket.category, subcategory=ticket.subcategory,
-            item=ticket.item, priority=ticket.priority, status=ticket.status,
-            edit_note=edit_note or 'Edited',
-        )
-        ticket.title = request.POST.get('title', ticket.title).strip()
-        ticket.description = request.POST.get('description', ticket.description).strip()
-        ticket.category = request.POST.get('category', ticket.category)
-        ticket.subcategory = request.POST.get('subcategory', '')
-        ticket.item = request.POST.get('item', '')
-        ticket.priority = request.POST.get('priority', ticket.priority)
-        if can_delete_edit(request.user):
-            ticket.status = request.POST.get('status', ticket.status)
-        ticket.tags = request.POST.get('tags', ticket.tags)
-        ticket.save()
-        messages.success(request, f'Ticket #{ticket.id} updated.')
-        return redirect('ticket_detail', pk=pk)
+        try:
+            edit_note = request.POST.get('edit_note', '').strip()
+            TicketEditHistory.objects.create(
+                ticket=ticket, edited_by=request.user,
+                title=ticket.title, description=ticket.description,
+                category=ticket.category, subcategory=ticket.subcategory,
+                item=ticket.item, priority=ticket.priority, status=ticket.status,
+                edit_note=edit_note or 'Edited',
+            )
+            valid_priorities = [p for p, _ in Ticket.PRIORITY_CHOICES]
+            valid_statuses   = [s for s, _ in Ticket.STATUS_CHOICES]
+            valid_categories = [c for c, _ in Ticket.CATEGORY_CHOICES]
+            new_title = request.POST.get('title', ticket.title).strip()
+            new_desc  = request.POST.get('description', ticket.description).strip()
+            new_cat   = request.POST.get('category', ticket.category)
+            new_pri   = request.POST.get('priority', ticket.priority)
+            ticket.title       = new_title or ticket.title
+            ticket.description = new_desc  or ticket.description
+            ticket.category    = new_cat if new_cat in valid_categories else ticket.category
+            ticket.subcategory = request.POST.get('subcategory', '')
+            ticket.item        = request.POST.get('item', '')
+            ticket.priority    = new_pri if new_pri in valid_priorities else ticket.priority
+            ticket.tags        = request.POST.get('tags', ticket.tags)
+            if can_delete_edit(request.user):
+                new_status = request.POST.get('status', ticket.status)
+                ticket.status = new_status if new_status in valid_statuses else ticket.status
+                if ticket.status == 'resolved' and not ticket.resolved_at:
+                    ticket.resolved_at = timezone.now()
+            ticket.save()
+            messages.success(request, f'Ticket #{ticket.id} updated.')
+            return redirect('ticket_detail', pk=pk)
+        except Exception as e:
+            messages.error(request, f'Could not save changes: {e}')
 
     return render(request, 'ticket_edit.html', {
         'ticket': ticket,
@@ -301,47 +319,56 @@ def ticket_delete(request, pk):
 def create_ticket(request):
     from directory.models import StaffMember
     if request.method == 'POST':
-        title = request.POST.get('title','').strip()
-        description = request.POST.get('description','').strip()
-        user_email = request.POST.get('user_email','').strip()
-        channel = request.POST.get('channel','manual')
-        staff_id = request.POST.get('staff_member')
+        title       = request.POST.get('title', '').strip()
+        description = request.POST.get('description', '').strip()
+        user_email  = request.POST.get('user_email', '').strip()
+        channel     = request.POST.get('channel', 'manual')
+        staff_id    = request.POST.get('staff_member', '').strip()
 
-        if not user_email:
-            messages.error(request, 'Requester email is required.')
-            return redirect('create_ticket')
+        valid_channels = [c for c, _ in Ticket.CHANNEL_CHOICES]
+        if channel not in valid_channels:
+            channel = 'manual'
 
-        if title and description and user_email:
-            result = classify(title, description)
-            ticket = Ticket.objects.create(
-                title=title, description=description, user_email=user_email,
-                category=result['category'], subcategory=result.get('subcategory',''),
-                item=result.get('item',''), priority=result['priority'],
-                required_level=result['level'], sla_hours=result['sla_hours'],
-                channel=channel,
-            )
-            if staff_id:
-                try:
-                    sm = StaffMember.objects.get(pk=staff_id)
-                    ticket.requester_name = sm.full_name
-                    ticket.save()
-                except StaffMember.DoesNotExist:
-                    pass
-            assignee = auto_assign(ticket)
-            if assignee:
-                ticket.assigned_to = assignee
-                ticket.save()
-                notify_assignment(ticket, assignee)
-            messages.success(request, f'Ticket #{ticket.id} created.')
-            return redirect('ticket_detail', pk=ticket.id)
-        else:
+        if not (title and description and user_email):
             messages.error(request, 'Please fill in all required fields.')
+        else:
+            try:
+                result = classify(title, description)
+                ticket = Ticket.objects.create(
+                    title=title, description=description, user_email=user_email,
+                    category=result.get('category', 'other'),
+                    subcategory=result.get('subcategory', ''),
+                    item=result.get('item', ''),
+                    priority=result.get('priority', 'medium'),
+                    required_level=result.get('level', 'associate'),
+                    sla_hours=result.get('sla_hours', 24),
+                    channel=channel,
+                )
+                if staff_id:
+                    try:
+                        sm = StaffMember.objects.get(pk=int(staff_id))
+                        ticket.requester_name = sm.full_name
+                        ticket.save()
+                    except (StaffMember.DoesNotExist, ValueError):
+                        pass
+                try:
+                    assignee = auto_assign(ticket)
+                    if assignee:
+                        ticket.assigned_to = assignee
+                        ticket.save()
+                        notify_assignment(ticket, assignee)
+                except Exception:
+                    pass
+                messages.success(request, f'Ticket #{ticket.id} created.')
+                return redirect('ticket_detail', pk=ticket.id)
+            except Exception as e:
+                messages.error(request, f'Could not create ticket: {e}')
 
     staff_members = []
     try:
-        from directory.models import StaffMember
         staff_members = StaffMember.objects.filter(is_active=True).order_by('first_name')
-    except: pass
+    except Exception:
+        pass
 
     return render(request, 'create_ticket.html', {
         'staff_members': staff_members,

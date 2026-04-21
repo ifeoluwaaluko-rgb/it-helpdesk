@@ -181,7 +181,7 @@
         <input type="hidden" name="action" value="reassign">
         <select name="user_id" class="zd-select mb-2">
           <option value="">— Select staff —</option>
-          {% for u in staff_users %}<option value="{{ u.id }}" {% if ticket.assigned_to.id == u.id %}selected{% endif %}>{{ u.get_full_name|default:u.username }}{% if u.profile.role %} ({{ u.profile.get_role_display }}){% endif %}</option>{% endfor %}
+          {% for u in staff_users %}<option value="{{ u.id }}" {% if ticket.assigned_to.id == u.id %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>{% endfor %}
         </select>
         <button type="submit" class="zd-btn zd-btn-secondary w-full justify-center text-xs">Reassign</button>
       </form>

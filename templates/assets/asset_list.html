@@ -2,18 +2,24 @@
 {% block title %}Asset Inventory{% endblock %}
 {% block content %}
 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-  <div><h1 class="text-xl font-bold text-gray-900">Asset Inventory</h1><p class="text-sm text-gray-500">{{ total }} asset{{ total|pluralize }} total</p></div>
+  <div>
+    <h1 class="text-xl font-bold text-gray-900">Asset Inventory</h1>
+    <p class="text-sm text-gray-500">
+      {{ total }} asset{{ total|pluralize }} total
+      {% if is_filtered %}&nbsp;·&nbsp;<span class="text-blue-600">{{ total_filtered }} shown after filter</span>{% endif %}
+    </p>
+  </div>
   <div class="flex gap-2 flex-wrap">
-    <a href="{% url 'asset_import' %}" class="btn-secondary text-xs">📥 Import CSV</a>
-    <a href="{% url 'asset_template' %}" class="btn-secondary text-xs">⬇ Template</a>
-    <a href="{% url 'asset_create' %}" class="btn-primary text-xs">+ Register Asset</a>
+    <a href="{% url 'asset_import' %}" class="zd-btn zd-btn-secondary text-xs">📥 Import CSV</a>
+    <a href="{% url 'asset_template' %}" class="zd-btn zd-btn-secondary text-xs">⬇ Template</a>
+    <a href="{% url 'asset_create' %}" class="zd-btn zd-btn-primary text-xs">+ Register Asset</a>
   </div>
 </div>
 <!-- Status summary -->
 <div class="grid grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
-  {% for val, label in status_choices %}
+  {% for val, label, count in status_summary %}
   <a href="?status={{ val }}" class="card text-center hover:border-blue-300 transition-all {% if sel_status == val %}border-blue-400 bg-blue-50{% endif %}">
-    <p class="text-2xl font-black {% if val == 'active' %}text-green-600{% elif val == 'faulty' %}text-red-600{% elif val == 'in_repair' %}text-yellow-600{% elif val == 'retired' %}text-gray-400{% else %}text-blue-600{% endif %}">{{ assets|length }}</p>
+    <p class="text-2xl font-black {% if val == 'active' %}text-green-600{% elif val == 'faulty' %}text-red-600{% elif val == 'in_repair' %}text-yellow-600{% elif val == 'retired' %}text-gray-400{% else %}text-blue-600{% endif %}">{{ count }}</p>
     <p class="text-xs text-gray-500 mt-1">{{ label }}</p>
   </a>
   {% endfor %}

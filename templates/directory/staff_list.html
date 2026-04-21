@@ -3,10 +3,10 @@
 {% block content %}
 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
   <div><h1 class="text-xl font-bold text-gray-900">Staff Directory</h1><p class="text-sm text-gray-500">{{ staff.count }} member{{ staff.count|pluralize }}</p></div>
-  <div class="flex gap-2">
-    <a href="{% url 'import_staff' %}" class="btn-secondary text-xs">📥 Import CSV</a>
-    <a href="{% url 'staff_template' %}" class="btn-secondary text-xs">⬇ Template</a>
-    <a href="{% url 'staff_create' %}" class="btn-primary text-xs">+ Add Staff</a>
+  <div class="flex gap-2 flex-wrap">
+    <a href="{% url 'import_staff' %}" class="zd-btn zd-btn-secondary text-xs">📥 Import CSV</a>
+    <a href="{% url 'staff_template' %}" class="zd-btn zd-btn-secondary text-xs">⬇ Template</a>
+    <a href="{% url 'staff_create' %}" class="zd-btn zd-btn-primary text-xs">+ Add Staff</a>
   </div>
 </div>
 <form method="get" class="card mb-5 flex flex-wrap gap-3 items-end">

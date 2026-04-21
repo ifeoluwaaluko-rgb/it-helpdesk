@@ -1,47 +1,121 @@
 {% extends 'base.html' %}
 {% block title %}{{ member.full_name }} – Directory{% endblock %}
 {% block content %}
-<div class="mb-4"><a href="{% url 'staff_list' %}" class="text-sm text-gray-400 hover:text-blue-600">← Directory</a></div>
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-  <div class="card text-center">
-    <div class="w-20 h-20 rounded-full bg-blue-100 text-blue-700 text-3xl font-black flex items-center justify-center mx-auto mb-4">{{ member.first_name|first|upper }}</div>
-    <h1 class="text-xl font-bold text-gray-900">{{ member.full_name }}</h1>
-    <p class="text-sm text-gray-500 mt-1">{{ member.job_title|default:"No title" }}</p>
-    <span class="badge mt-2 {% if member.is_active %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-500{% endif %}">{% if member.is_active %}Active{% else %}Inactive{% endif %}</span>
-    <div class="mt-4 space-y-2 text-sm text-left">
-      <div class="flex gap-2"><span class="text-gray-400 w-24 flex-shrink-0">Email</span><span class="text-gray-700 break-all">{{ member.email }}</span></div>
-      {% if member.phone %}<div class="flex gap-2"><span class="text-gray-400 w-24 flex-shrink-0">Phone</span><span class="text-gray-700">{{ member.phone }}</span></div>{% endif %}
-      <div class="flex gap-2"><span class="text-gray-400 w-24 flex-shrink-0">Department</span><span class="text-gray-700">{{ member.department.name|default:"—" }}</span></div>
-    </div>
-    <a href="{% url 'staff_edit' member.pk %}" class="btn-secondary mt-4 w-full text-center block">Edit</a>
-  </div>
-  <div class="lg:col-span-2">
-    <div class="zd-card p-5">
-      <h2 class="text-sm font-semibold text-gray-700 mb-4">Recent Tickets ({{ tickets.count }})</h2>
-      {% if tickets %}
-      <div class="space-y-2">
-        {% for t in tickets %}
-        <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-          <div><a href="{% url 'ticket_detail' t.pk %}" class="text-sm font-medium text-blue-600 hover:underline">#{{ t.id }} {{ t.title|truncatechars:40 }}</a><p class="text-xs text-gray-400 mt-0.5">{{ t.created_at|date:"M d, Y" }}</p></div>
-          <span class="badge {% if t.status == 'open' %}bg-blue-100 text-blue-700{% elif t.status == 'in_progress' %}bg-yellow-100 text-yellow-700{% elif t.status == 'resolved' %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-600{% endif %} flex-shrink-0">{{ t.get_status_display }}</span>
-        </div>
-        {% endfor %}
+
+<div class="mb-5">
+  <a href="{% url 'staff_list' %}" class="text-sm text-gray-400 hover:text-blue-600">← Staff Directory</a>
+</div>
+
+<!-- Profile Hero -->
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-5">
+  <div class="h-24 bg-gradient-to-r from-[#03363d] to-[#1f73b7]"></div>
+  <div class="px-6 pb-6">
+    <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-10">
+      <div class="w-20 h-20 rounded-2xl border-4 border-white bg-[#1f73b7] text-white text-2xl font-black flex items-center justify-center shadow-md flex-shrink-0">
+        {{ member.first_name|first|upper }}{{ member.last_name|first|upper }}
       </div>
-      {% else %}<p class="text-sm text-gray-400">No tickets found.</p>{% endif %}
-    </div>
-    {% if member.assets.exists %}
-    <div class="card mt-5">
-      <h2 class="text-sm font-semibold text-gray-700 mb-4">Assigned Assets</h2>
-      <div class="space-y-2">
-        {% for asset in member.assets.all %}
-        <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-          <div><a href="{% url 'asset_detail' asset.pk %}" class="text-sm font-medium text-blue-600 hover:underline">{{ asset.name }}</a><p class="text-xs text-gray-400">{{ asset.asset_id }}</p></div>
-          <span class="badge {% if asset.status == 'active' %}bg-green-100 text-green-700{% else %}bg-red-100 text-red-700{% endif %}">{{ asset.get_status_display }}</span>
-        </div>
-        {% endfor %}
+      <div class="flex gap-2 pb-1">
+        <a href="{% url 'staff_edit' member.pk %}" class="zd-btn zd-btn-secondary text-xs">✏️ Edit Profile</a>
+        <a href="mailto:{{ member.email }}" class="zd-btn zd-btn-primary text-xs">✉ Send Email</a>
       </div>
     </div>
-    {% endif %}
+    <div class="mt-3">
+      <div class="flex items-center gap-3 flex-wrap">
+        <h1 class="text-2xl font-bold text-gray-900">{{ member.full_name }}</h1>
+        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold {% if member.is_active %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-500{% endif %}">
+          {% if member.is_active %}● Active{% else %}● Inactive{% endif %}
+        </span>
+      </div>
+      <p class="text-sm text-gray-500 mt-0.5">{{ member.job_title|default:"—" }}{% if member.department %} · {{ member.department.name }}{% endif %}</p>
+    </div>
+    <div class="flex flex-wrap gap-3 mt-4">
+      <span class="inline-flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-sm text-gray-700">
+        ✉ {{ member.email }}
+      </span>
+      {% if member.phone %}
+      <span class="inline-flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-sm text-gray-700">
+        📞 {{ member.phone }}
+      </span>
+      {% endif %}
+      {% if member.department %}
+      <span class="inline-flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-sm text-gray-700">
+        🏢 {{ member.department.name }}
+      </span>
+      {% endif %}
+      <span class="inline-flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-sm text-gray-700">
+        📅 Added {{ member.created_at|date:"M d, Y" }}
+      </span>
+    </div>
   </div>
 </div>
+
+<!-- Stats row -->
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
+    <p class="text-2xl font-black text-[#1f73b7]">{{ tickets.count }}</p>
+    <p class="text-xs text-gray-500 mt-1">Tickets Raised</p>
+  </div>
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
+    <p class="text-2xl font-black text-green-600">{{ member.assets.count }}</p>
+    <p class="text-xs text-gray-500 mt-1">Assigned Assets</p>
+  </div>
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center col-span-2 sm:col-span-1">
+    <p class="text-2xl font-black {% if member.is_active %}text-green-600{% else %}text-gray-400{% endif %}">
+      {% if member.is_active %}Active{% else %}Inactive{% endif %}
+    </p>
+    <p class="text-xs text-gray-500 mt-1">Status</p>
+  </div>
+</div>
+
+<!-- Tickets + Assets -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-gray-800">🎫 Recent Tickets</h2>
+      <span class="text-xs text-gray-400">Last 10</span>
+    </div>
+    <div class="divide-y divide-gray-50">
+      {% if tickets %}
+        {% for t in tickets %}
+        <div class="px-5 py-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition">
+          <div class="min-w-0">
+            <a href="{% url 'ticket_detail' t.pk %}" class="text-sm font-medium text-blue-600 hover:underline truncate block">#{{ t.id }} {{ t.title|truncatechars:45 }}</a>
+            <p class="text-xs text-gray-400 mt-0.5">{{ t.created_at|date:"M d, Y" }} · {{ t.get_category_display }}</p>
+          </div>
+          <span class="badge flex-shrink-0 {% if t.status == 'open' %}bg-blue-100 text-blue-700{% elif t.status == 'in_progress' %}bg-yellow-100 text-yellow-700{% elif t.status == 'resolved' %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-600{% endif %}">
+            {{ t.get_status_display }}
+          </span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="px-5 py-10 text-center text-sm text-gray-400">No tickets found for this staff member.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-gray-800">🖥 Assigned Assets</h2>
+      <span class="text-xs text-gray-400">{{ member.assets.count }} total</span>
+    </div>
+    <div class="divide-y divide-gray-50">
+      {% if member.assets.exists %}
+        {% for asset in member.assets.all %}
+        <div class="px-5 py-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition">
+          <div class="min-w-0">
+            <a href="{% url 'asset_detail' asset.pk %}" class="text-sm font-medium text-blue-600 hover:underline">{{ asset.name }}</a>
+            <p class="text-xs text-gray-400 mt-0.5">{{ asset.asset_id }}{% if asset.category %} · {{ asset.category.name }}{% endif %}</p>
+          </div>
+          <span class="badge flex-shrink-0 {% if asset.status == 'active' %}bg-green-100 text-green-700{% elif asset.status == 'faulty' %}bg-red-100 text-red-700{% elif asset.status == 'in_repair' %}bg-yellow-100 text-yellow-700{% else %}bg-gray-100 text-gray-500{% endif %}">
+            {{ asset.get_status_display }}
+          </span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="px-5 py-10 text-center text-sm text-gray-400">No assets assigned to this staff member.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 {% endblock %}
