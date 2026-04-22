@@ -37,6 +37,12 @@ STOP_WORDS = {
 }
 
 
+def setup_required():
+    return not User.objects.exists()
+
+
+
+
 def _mark_first_response(ticket):
     if not ticket.first_response_at:
         ticket.first_response_at = timezone.now()
@@ -161,6 +167,8 @@ def can_delete_edit(user):
 
 
 def login_view(request):
+    if setup_required():
+        return redirect('first_time_setup')
     if request.user.is_authenticated:
         return redirect('dashboard')
     if request.method == 'POST':
@@ -173,6 +181,68 @@ def login_view(request):
             return redirect(next_url)
         messages.error(request, 'Invalid username or password.')
     return render(request, 'login.html', {'next': request.GET.get('next', '')})
+
+
+
+def first_time_setup(request):
+    if not setup_required():
+        messages.info(request, 'Initial setup has already been completed. Please sign in.')
+        return redirect('login')
+
+    if request.method == 'POST':
+        full_name = request.POST.get('full_name', '').strip()
+        username = request.POST.get('username', '').strip()
+        email = request.POST.get('email', '').strip().lower()
+        password = request.POST.get('password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+
+        errors = []
+        if not full_name:
+            errors.append('Full name is required.')
+        if not username:
+            errors.append('Username is required.')
+        if not email:
+            errors.append('Email is required.')
+        if not password:
+            errors.append('Password is required.')
+        if password and len(password) < 8:
+            errors.append('Password must be at least 8 characters.')
+        if password != confirm_password:
+            errors.append('Passwords do not match.')
+        if username and User.objects.filter(username=username).exists():
+            errors.append('That username is already taken.')
+        if email and User.objects.filter(email=email).exists():
+            errors.append('That email is already in use.')
+
+        if errors:
+            for err in errors:
+                messages.error(request, err)
+        else:
+            first_name = full_name.split()[0]
+            last_name = ' '.join(full_name.split()[1:]) if len(full_name.split()) > 1 else ''
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    password=password,
+                    first_name=first_name,
+                    last_name=last_name,
+                    is_staff=True,
+                    is_superuser=True,
+                )
+                Profile.objects.update_or_create(
+                    user=user,
+                    defaults={'role': 'superadmin'}
+                )
+                login(request, user)
+                messages.success(request, 'Setup complete. Welcome to IT Helpdesk.')
+                return redirect('dashboard')
+
+    context = {
+        'setup_mode': True,
+        'any_users_exist': User.objects.exists(),
+    }
+    return render(request, 'setup_first_admin.html', context)
 
 
 def logout_view(request):
