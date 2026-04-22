@@ -187,12 +187,17 @@
         </div>
         <button class="zd-btn zd-btn-primary w-full">Update Status</button>
       </form>
-      {% if ticket.resolved_by %}
+      {% if resolved_event %}
         <div class="mt-4 rounded-xl bg-green-50 border border-green-100 px-4 py-3 text-sm text-green-800">
-          Resolved by <span class="font-semibold">{{ ticket.resolved_by.get_full_name|default:ticket.resolved_by.username }}</span>
-          {% if ticket.resolved_at %}
-            <span class="block text-xs text-green-700 mt-1" data-local-dt="{{ ticket.resolved_at|date:'c' }}" data-local-style="short">{{ ticket.resolved_at|date:"M d, H:i" }}</span>
-          {% endif %}
+          {{ resolved_event.action_display }} by
+          <span class="font-semibold">
+            {% if resolved_event.actor %}
+              {{ resolved_event.actor.get_full_name|default:resolved_event.actor.username }}
+            {% else %}
+              System
+            {% endif %}
+          </span>
+          <span class="block text-xs text-green-700 mt-1" data-local-dt="{{ resolved_event.created_at|date:'c' }}" data-local-style="short">{{ resolved_event.created_at|date:"M d, H:i" }}</span>
         </div>
       {% endif %}
     </section>

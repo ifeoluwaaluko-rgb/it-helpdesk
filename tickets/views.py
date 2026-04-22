@@ -8,7 +8,7 @@ from django.db.models import Count, Q
 from django.contrib import messages
 from django.conf import settings
 from django.http import JsonResponse, Http404, FileResponse
-from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment, TicketStatusEvent
+from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment
 from .classifier import classify, CATEGORY_TREE
 from .assignment import auto_assign
 from .notifications import notify_assignment, notify_status_change, notify_ticket_received
@@ -19,6 +19,7 @@ from datetime import date, timedelta
 import logging
 from pathlib import Path
 import mimetypes
+from types import SimpleNamespace
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +43,66 @@ def _mark_first_response(ticket):
 
 
 def _log_status_event(ticket, actor, action, from_status='', to_status='', note=''):
-    TicketStatusEvent.objects.create(
+    TicketEditHistory.objects.create(
         ticket=ticket,
-        actor=actor,
-        action=action,
-        from_status=from_status or '',
-        to_status=to_status or '',
-        note=(note or '')[:255],
+        edited_by=actor,
+        title=ticket.title,
+        description=ticket.description,
+        category=ticket.category,
+        subcategory=ticket.subcategory,
+        item=ticket.item,
+        priority=ticket.priority,
+        status=from_status or ticket.status,
+        edit_note=f"EVENT::{action}||{from_status or ''}||{to_status or ''}||{(note or '')[:180]}",
     )
+
+
+def _get_status_events(ticket):
+    label_map = {
+        'created': 'Created',
+        'picked_up': 'Picked Up',
+        'assigned': 'Assigned',
+        'reassigned': 'Reassigned',
+        'status_changed': 'Status Changed',
+        'resolved': 'Resolved',
+        'closed': 'Closed',
+        'reopened': 'Reopened',
+    }
+    events = [
+        SimpleNamespace(
+            action='created',
+            action_display='Created',
+            created_at=ticket.created_at,
+            actor=None,
+            from_status='',
+            to_status=ticket.status,
+            note='Ticket created',
+        )
+    ]
+
+    for history in ticket.edit_history.select_related('edited_by').all():
+        note = history.edit_note or ''
+        if not note.startswith('EVENT::'):
+            continue
+        payload = note[len('EVENT::'):]
+        parts = payload.split('||', 3)
+        while len(parts) < 4:
+            parts.append('')
+        action, from_status, to_status, extra_note = parts
+        events.append(
+            SimpleNamespace(
+                action=action,
+                action_display=label_map.get(action, action.replace('_', ' ').title()),
+                created_at=history.edited_at,
+                actor=history.edited_by,
+                from_status=from_status,
+                to_status=to_status,
+                note=extra_note,
+            )
+        )
+
+    events.sort(key=lambda e: e.created_at, reverse=True)
+    return events[:12]
 
 
 def _normalize_issue_signature(ticket):
@@ -313,15 +366,10 @@ def ticket_detail(request, pk):
                     if not ticket.resolved_at:
                         ticket.resolved_at = timezone.now()
                         update_fields.append('resolved_at')
-                    ticket.resolved_by = request.user
-                    update_fields.append('resolved_by')
                 elif new_status in ['open', 'in_progress', 'pending']:
                     if ticket.resolved_at:
                         ticket.resolved_at = None
                         update_fields.append('resolved_at')
-                    if ticket.resolved_by_id is not None:
-                        ticket.resolved_by = None
-                        update_fields.append('resolved_by')
 
                 ticket.save(update_fields=update_fields)
 
@@ -402,7 +450,8 @@ def ticket_detail(request, pk):
         return redirect('ticket_detail', pk=pk)
 
     staff_users = User.objects.filter(is_staff=True).select_related('profile') if can_assign(request.user) else []
-    status_events = ticket.status_events.select_related('actor')[:12]
+    status_events = _get_status_events(ticket)
+    resolved_event = next((event for event in status_events if event.action in ['resolved', 'closed']), None)
 
     return render(request, 'ticket_detail.html', {
         'ticket': ticket,
@@ -410,6 +459,7 @@ def ticket_detail(request, pk):
         'related_articles': related_articles,
         'staff_users': staff_users,
         'status_events': status_events,
+        'resolved_event': resolved_event,
         'status_choices': Ticket.STATUS_CHOICES,
         'category_choices': Ticket.CATEGORY_CHOICES,
         'category_tree_json': json.dumps(CATEGORY_TREE),
