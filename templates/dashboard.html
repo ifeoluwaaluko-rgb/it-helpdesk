@@ -226,14 +226,19 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
+(function () {
+  // Load Chart.js dynamically then boot the dashboard logic
+  var script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+  script.onload = bootDashboard;
+  document.head.appendChild(script);
+
+  function bootDashboard() {
   if (!document.querySelector('[data-dashboard-page]')) return;
   const region = document.getElementById('dashboard-live-region');
   if (!region) return;
@@ -303,6 +308,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   setInterval(silentRefreshDashboard, 5000);
-});
+  }
+})();
 </script>
 {% endblock %}
