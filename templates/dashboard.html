@@ -231,11 +231,35 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  if (!document.querySelector('[data-dashboard-page]')) return;
-  setInterval(function () {
-    if (document.hidden) return;
-    window.location.reload();
-  }, 15000);
+  const ctx = document.getElementById('volumeChart');
+  if (ctx && typeof Chart !== 'undefined') {
+    try {
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: {{ chart_labels|safe }},
+          datasets: [{
+            label: 'Tickets',
+            data: {{ chart_data|safe }},
+            backgroundColor: 'rgba(31,115,183,0.85)',
+            borderRadius: 4,
+            borderSkipped: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('Chart render failed', e);
+    }
+  }
 });
 </script>
 {% endblock %}
