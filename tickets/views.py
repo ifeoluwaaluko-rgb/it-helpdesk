@@ -281,16 +281,44 @@ def ticket_detail(request, pk):
         elif action == 'update_status':
             new_status = request.POST.get('status', '').strip()
             valid_statuses = [s for s, _ in Ticket.STATUS_CHOICES]
-            if new_status and new_status in valid_statuses:
+
+            if not new_status or new_status not in valid_statuses:
+                messages.error(request, 'Invalid status selection.')
+                return redirect('ticket_detail', pk=pk)
+
+            try:
                 old_status = ticket.status
+                update_fields = ['status', 'updated_at']
+
                 ticket.status = new_status
-                if new_status == 'resolved' and not ticket.resolved_at:
-                    ticket.resolved_at = timezone.now()
-                ticket.save()
+
+                if new_status == 'resolved':
+                    if not ticket.resolved_at:
+                        ticket.resolved_at = timezone.now()
+                        update_fields.append('resolved_at')
+                elif new_status in ['open', 'in_progress', 'pending'] and ticket.resolved_at:
+                    ticket.resolved_at = None
+                    update_fields.append('resolved_at')
+
+                ticket.save(update_fields=update_fields)
+
                 if new_status in ['in_progress', 'pending', 'resolved', 'closed']:
                     _mark_first_response(ticket)
+
                 if new_status != old_status:
-                    notify_status_change(ticket, request.user)
+                    try:
+                        notify_status_change(ticket, request.user)
+                    except Exception:
+                        logger.exception('Failed to send status change notification for ticket %s', ticket.id)
+                    messages.success(
+                        request,
+                        f'Ticket #{ticket.id} status updated from {ticket.get_status_display() if old_status == new_status else dict(Ticket.STATUS_CHOICES).get(old_status, old_status)} to {ticket.get_status_display()}.'
+                    )
+                else:
+                    messages.info(request, f'Ticket #{ticket.id} is already marked as {ticket.get_status_display()}.')
+            except Exception:
+                logger.exception('Failed to update status for ticket %s', ticket.id)
+                messages.error(request, 'We could not update the ticket status. Please try again.')
 
         elif action == 'reassign' and can_assign(request.user):
             uid = request.POST.get('user_id', '').strip()
