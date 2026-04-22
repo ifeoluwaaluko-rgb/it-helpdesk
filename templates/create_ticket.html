@@ -5,7 +5,7 @@
 <div class="max-w-2xl">
   <h1 class="text-lg font-bold text-[#2f3941] mb-4">Create Ticket</h1>
   <div class="zd-card p-6">
-    <form method="post" class="space-y-4">
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
       {% csrf_token %}
 
       <!-- Staff search -->
@@ -38,6 +38,13 @@
       <div>
         <label class="zd-label">Description <span class="text-red-500">*</span></label>
         <textarea name="description" rows="5" required placeholder="Describe the issue in detail..." class="zd-input resize-none"></textarea>
+      </div>
+
+
+      <div>
+        <label class="zd-label">Attachment (optional)</label>
+        <input name="attachment" type="file" class="zd-input" accept=".jpg,.jpeg,.png,.gif,.pdf,.docx,.xlsx,.txt,.zip">
+        <p class="text-xs text-[#68737d] mt-1">One file only. Max {{ max_attachment_mb }} MB. Allowed: {{ allowed_attachment_types }}.</p>
       </div>
 
       <div class="flex gap-3 pt-2">

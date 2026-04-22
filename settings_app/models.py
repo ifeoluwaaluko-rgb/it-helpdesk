@@ -56,9 +56,12 @@ class IntegrationConfig(models.Model):
     INTEGRATION_CHOICES = [
         ('email_smtp',   'Email – SMTP (Outbound)'),
         ('email_imap',   'Email – IMAP (Inbound)'),
+        ('microsoft_graph', 'Microsoft Graph'),
+        ('generic_webhook', 'Generic Webhook'),
         ('whatsapp',     'WhatsApp Business Cloud API'),
         ('teams',        'Microsoft Teams Webhook'),
         ('slack',        'Slack Webhook'),
+        ('openai',       'OpenAI / AI Provider'),
     ]
 
     integration = models.CharField(
@@ -109,9 +112,13 @@ class IntegrationConfig(models.Model):
         """Returns True if the minimum required fields are filled."""
         if self.integration in ('email_smtp', 'email_imap'):
             return bool(self.host and self.username and self._password)
+        if self.integration == 'microsoft_graph':
+            return bool(self.username and self._access_token)
+        if self.integration == 'openai':
+            return bool(self._access_token)
         if self.integration == 'whatsapp':
             return bool(self._access_token and self.phone_number_id)
-        if self.integration in ('teams', 'slack'):
+        if self.integration in ('teams', 'slack', 'generic_webhook'):
             return bool(self.webhook_url)
         return False
 
@@ -122,3 +129,30 @@ class IntegrationConfig(models.Model):
         ordering = ['integration']
         verbose_name = 'Integration Config'
         verbose_name_plural = 'Integration Configs'
+
+
+    def masked_password(self):
+        return '●●●●●●' if self._password else 'Not set'
+
+    def masked_token(self):
+        return '●●●●●●' if self._access_token else 'Not set'
+
+
+class IntegrationAuditLog(models.Model):
+    ACTION_CHOICES = [
+        ('save', 'Saved'),
+        ('test', 'Tested'),
+        ('toggle', 'Toggled'),
+    ]
+    integration = models.CharField(max_length=30)
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    status = models.CharField(max_length=20, default='success')
+    message = models.CharField(max_length=255, blank=True)
+    actor = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.integration} {self.action} ({self.status})"
