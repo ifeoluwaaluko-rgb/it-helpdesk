@@ -13,6 +13,9 @@ from .notifications import notify_assignment, notify_status_change
 from knowledge.models import Article
 import json
 from datetime import date, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_role(user):
@@ -32,7 +35,9 @@ def login_view(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
     if request.method == 'POST':
-        user = authenticate(request, username=request.POST['username'], password=request.POST['password'])
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '')
+        user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
             next_url = request.POST.get('next') or request.GET.get('next') or '/dashboard/'
@@ -283,6 +288,7 @@ def ticket_edit(request, pk):
             messages.success(request, f'Ticket #{ticket.id} updated.')
             return redirect('ticket_detail', pk=pk)
         except Exception as e:
+            logger.exception('ticket_edit failed for ticket_id=%s user_id=%s', pk, request.user.id)
             messages.error(request, f'Could not save changes: {e}')
 
     return render(request, 'ticket_edit.html', {
