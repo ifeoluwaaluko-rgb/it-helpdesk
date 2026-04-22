@@ -76,6 +76,16 @@ class IntegrationConfig(models.Model):
                                    help_text='Email address / API user')
     use_tls     = models.BooleanField(default=True)
     use_ssl     = models.BooleanField(default=False)
+    auth_mode   = models.CharField(
+        max_length=30,
+        default='password',
+        choices=[
+            ('password', 'SMTP password / app password'),
+            ('gmail_api_oauth', 'Gmail API OAuth2'),
+        ],
+    )
+    oauth_client_id = models.CharField(max_length=255, blank=True)
+    oauth_token_uri = models.CharField(max_length=255, blank=True, default='https://oauth2.googleapis.com/token')
     webhook_url = models.CharField(max_length=500, blank=True,
                                    help_text='Webhook URL (Teams / Slack)')
     phone_number_id = models.CharField(max_length=50, blank=True,
@@ -86,6 +96,8 @@ class IntegrationConfig(models.Model):
     # ── Encrypted fields ──────────────────────────────────────
     _password     = models.TextField(blank=True, db_column='password')
     _access_token = models.TextField(blank=True, db_column='access_token')
+    _oauth_client_secret = models.TextField(blank=True, db_column='oauth_client_secret')
+    _oauth_refresh_token = models.TextField(blank=True, db_column='oauth_refresh_token')
 
     updated_at  = models.DateTimeField(auto_now=True)
     updated_by  = models.ForeignKey(
@@ -100,6 +112,23 @@ class IntegrationConfig(models.Model):
     def password(self, value):
         self._password = encrypt_value(value) if value else ''
 
+
+    @property
+    def oauth_client_secret(self):
+        return decrypt_value(self._oauth_client_secret)
+
+    @oauth_client_secret.setter
+    def oauth_client_secret(self, value):
+        self._oauth_client_secret = encrypt_value(value) if value else ''
+
+    @property
+    def oauth_refresh_token(self):
+        return decrypt_value(self._oauth_refresh_token)
+
+    @oauth_refresh_token.setter
+    def oauth_refresh_token(self, value):
+        self._oauth_refresh_token = encrypt_value(value) if value else ''
+
     # ── Access token property ─────────────────────────────────
     @property
     def access_token(self):
@@ -111,7 +140,11 @@ class IntegrationConfig(models.Model):
 
     def is_configured(self):
         """Returns True if the minimum required fields are filled."""
-        if self.integration in ('email_smtp', 'email_imap'):
+        if self.integration == 'email_smtp':
+            if self.auth_mode == 'gmail_api_oauth':
+                return bool(self.username and self.oauth_client_id and self._oauth_client_secret and self._oauth_refresh_token)
+            return bool(self.host and self.username and self._password)
+        if self.integration == 'email_imap':
             return bool(self.host and self.username and self._password)
         if self.integration == 'microsoft_graph':
             return bool(self.username and self._access_token)
@@ -137,6 +170,12 @@ class IntegrationConfig(models.Model):
 
     def masked_token(self):
         return '●●●●●●' if self._access_token else 'Not set'
+
+    def masked_oauth_client_secret(self):
+        return '●●●●●●' if self._oauth_client_secret else 'Not set'
+
+    def masked_oauth_refresh_token(self):
+        return '●●●●●●' if self._oauth_refresh_token else 'Not set'
 
 
 class IntegrationAuditLog(models.Model):

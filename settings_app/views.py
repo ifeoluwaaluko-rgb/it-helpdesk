@@ -57,6 +57,44 @@ def _get_configs():
     return configs
 
 
+
+
+def _gmail_refresh_access_token(cfg):
+    payload = urllib.parse.urlencode({
+        'client_id': cfg.oauth_client_id,
+        'client_secret': cfg.oauth_client_secret,
+        'refresh_token': cfg.oauth_refresh_token,
+        'grant_type': 'refresh_token',
+    }).encode()
+    token_uri = cfg.oauth_token_uri or 'https://oauth2.googleapis.com/token'
+    req = urllib.request.Request(token_uri, data=payload, headers={'Content-Type': 'application/x-www-form-urlencoded'})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode())
+    access_token = data.get('access_token')
+    if not access_token:
+        raise RuntimeError(data.get('error_description') or data.get('error') or 'OAuth token refresh failed')
+    cfg.access_token = access_token
+    cfg.save(update_fields=['_access_token', 'updated_at'])
+    return access_token
+
+
+def _test_gmail_api(cfg):
+    try:
+        token = _gmail_refresh_access_token(cfg)
+        req = urllib.request.Request(
+            'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+            headers={'Authorization': f'Bearer {token}'}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        email_addr = data.get('emailAddress', cfg.username)
+        return True, f'Gmail API OAuth2 connection successful for {email_addr}.'
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors='ignore')
+        return False, f'Gmail API error: {e.code} {detail[:180]}'
+    except Exception as e:
+        return False, f'Gmail API error: {e}'
+
 @login_required
 def settings_home(request):
     if not _require_manager(request):
@@ -123,15 +161,25 @@ def save_smtp(request):
     if not _require_manager(request):
         return redirect('settings_home')
     cfg, _ = IntegrationConfig.objects.get_or_create(integration='email_smtp')
+    cfg.auth_mode = request.POST.get('auth_mode', 'password').strip() or 'password'
     cfg.host = request.POST.get('host', '').strip()
     cfg.port = int(request.POST.get('port', 587) or 587)
     cfg.username = request.POST.get('username', '').strip()
     cfg.use_tls = request.POST.get('use_tls') == 'on'
     cfg.use_ssl = request.POST.get('use_ssl') == 'on'
     cfg.is_active = request.POST.get('is_active') == 'on'
+    cfg.oauth_client_id = request.POST.get('oauth_client_id', '').strip()
+    token_uri = request.POST.get('oauth_token_uri', '').strip()
+    cfg.oauth_token_uri = token_uri or 'https://oauth2.googleapis.com/token'
     pw = request.POST.get('password', '').strip()
     if pw:
         cfg.password = pw
+    oauth_secret = request.POST.get('oauth_client_secret', '').strip()
+    if oauth_secret:
+        cfg.oauth_client_secret = oauth_secret
+    refresh_token = request.POST.get('oauth_refresh_token', '').strip()
+    if refresh_token:
+        cfg.oauth_refresh_token = refresh_token
     cfg.updated_by = request.user
     cfg.save()
     dj_settings.EMAIL_HOST = cfg.host
@@ -140,6 +188,7 @@ def save_smtp(request):
     dj_settings.EMAIL_HOST_PASSWORD = cfg.password
     dj_settings.EMAIL_USE_TLS = cfg.use_tls
     dj_settings.EMAIL_USE_SSL = getattr(cfg, 'use_ssl', False)
+    dj_settings.EMAIL_AUTH_MODE = cfg.auth_mode
     _log(request.user, 'email_smtp', 'save', 'success', 'SMTP settings saved')
     messages.success(request, 'SMTP settings saved.')
     return redirect('settings_home')
@@ -306,7 +355,10 @@ def test_connection(request, integration):
     return JsonResponse({'ok': ok, 'msg': msg})
 
 
+
 def _test_smtp(cfg):
+    if getattr(cfg, 'auth_mode', 'password') == 'gmail_api_oauth':
+        return _test_gmail_api(cfg)
     try:
         import smtplib
         use_ssl = getattr(cfg, 'use_ssl', False)
@@ -321,10 +373,10 @@ def _test_smtp(cfg):
         server.quit()
         return True, f'SMTP connection successful (port {port}).'
     except ConnectionRefusedError:
-        return False, f'SMTP error: Connection refused on port {cfg.port}. On Railway, try port 465 with SSL or use a relay service (Mailgun/Resend) on port 2525.'
+        return False, f'SMTP error: Connection refused on port {cfg.port}. On Railway, try port 465 with SSL or use Gmail API OAuth2 / a relay service (Mailgun/Resend) on port 2525.'
     except OSError as e:
         if 'unreachable' in str(e).lower() or '101' in str(e):
-            return False, f'SMTP error: Network unreachable. Railway blocks port 587 outbound. Switch to port 465 (SSL) or use Mailgun/Resend/SendGrid on port 2525.'
+            return False, 'SMTP error: Network unreachable from Railway. Use Gmail API OAuth2, Microsoft Graph, or a relay service on port 2525.'
         return False, f'SMTP error: {e}'
     except Exception as e:
         return False, f'SMTP error: {e}'

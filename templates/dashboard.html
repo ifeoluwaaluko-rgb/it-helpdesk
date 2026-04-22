@@ -62,10 +62,26 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
   <!-- Chart -->
   <div class="lg:col-span-2 zd-card p-5">
-    <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Ticket Volume — Last 7 Days</h3>
-    <canvas id="volumeChart" height="80" data-labels="{{ chart_labels|safe }}" data-values="{{ chart_data|safe }}"></canvas>
+    
+  <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Ticket Volume — Last 7 Days</h3>
+  <div class="space-y-3">
+    {% for point in chart_points %}
+    <div>
+      <div class="flex justify-between text-xs mb-1">
+        <span class="text-[#68737d]">{{ point.label }}</span>
+        <span class="font-medium text-[#2f3941]">{{ point.value }}</span>
+      </div>
+      <div class="w-full bg-[#eef2f6] rounded-full h-3 overflow-hidden">
+        <div class="h-3 rounded-full bg-[#1f73b7]" style="width:{% if chart_max %}{{ point.pct }}%"></div>
+      </div>
+    </div>
+    {% empty %}
+    <p class="text-sm text-[#68737d]">No ticket data yet.</p>
+    {% endfor %}
   </div>
-  <!-- Category -->
+</div>
+<!-- Category -->
+
   <div class="zd-card p-5">
     <h3 class="text-sm font-semibold text-[#2f3941] mb-4">By Category</h3>
     <div class="space-y-3">
@@ -229,77 +245,30 @@
 </div>
 {% endblock %}
 
+
 {% block extra_js %}
 <script>
 (function () {
-  // Load Chart.js dynamically then boot the dashboard logic
-  var script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-  script.onload = bootDashboard;
-  document.head.appendChild(script);
-
-  function bootDashboard() {
   if (!document.querySelector('[data-dashboard-page]')) return;
   const region = document.getElementById('dashboard-live-region');
   if (!region) return;
 
-  // ── Chart initialisation (called on first load and after each silent refresh)
-  let chartInstance = null;
-  function initVolumeChart() {
-    const canvas = document.getElementById('volumeChart');
-    if (!canvas) return;
-    // Chart.js keeps a registry; destroy any previous instance on the same canvas
-    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-    const existing = Chart.getChart(canvas);
-    if (existing) existing.destroy();
-    const labels = canvas.getAttribute('data-labels');
-    const data   = canvas.getAttribute('data-values');
-    if (!labels || !data) return;
-    chartInstance = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: JSON.parse(labels),
-        datasets: [{
-          label: 'Tickets',
-          data: JSON.parse(data),
-          backgroundColor: 'rgba(31,115,183,0.18)',
-          borderColor: '#1f73b7',
-          borderWidth: 2,
-          borderRadius: 4,
-          hoverBackgroundColor: 'rgba(31,115,183,0.35)',
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: { beginAtZero: true, ticks: { stepSize: 1, color: '#68737d', font: { size: 11 } }, grid: { color: '#e9ebed' } },
-          x: { ticks: { color: '#68737d', font: { size: 11 } }, grid: { display: false } }
-        }
-      }
-    });
-  }
-  initVolumeChart();
-
-  // ── Silent background refresh ──────────────────────────────────────────────
   let busy = false;
   async function silentRefreshDashboard() {
     if (busy || document.hidden) return;
     busy = true;
     try {
       const url = new URL(window.location.href);
-      url.searchParams.set('_partial', 'dashboard');
-      url.searchParams.set('_ts', Date.now().toString());
-      const response = await fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' });
-      if (!response.ok) return;
-      const html = await response.text();
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-      const nextRegion = doc.getElementById('dashboard-live-region');
-      if (!nextRegion) return;
-      region.innerHTML = nextRegion.innerHTML;
+      url.searchParams.set('partial', '1');
+      const res = await fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!res.ok) throw new Error('refresh failed');
+      const html = await res.text();
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = html;
+      const next = wrapper.querySelector('#dashboard-live-region');
+      if (!next) return;
+      region.innerHTML = next.innerHTML;
       if (window.upgradeDateNodes) window.upgradeDateNodes(region);
-      initVolumeChart();  // reinitialise chart after DOM replacement
     } catch (e) {
       console.debug('Dashboard silent refresh skipped', e);
     } finally {
@@ -308,7 +277,7 @@
   }
 
   setInterval(silentRefreshDashboard, 5000);
-  }
 })();
 </script>
 {% endblock %}
+

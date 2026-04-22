@@ -224,11 +224,17 @@ def dashboard(request):
     avg_resolution = round(sum(resolution_seconds) / len(resolution_seconds)) if resolution_seconds else 0
 
     today = date.today()
-    chart_labels, chart_data = [], []
+    chart_labels, chart_data, chart_points = [], [], []
     for i in range(6, -1, -1):
         day = today - timedelta(days=i)
-        chart_labels.append(day.strftime('%b %d'))
-        chart_data.append(all_tickets.filter(created_at__date=day).count())
+        count = all_tickets.filter(created_at__date=day).count()
+        label = day.strftime('%b %d')
+        chart_labels.append(label)
+        chart_data.append(count)
+        chart_points.append({'label': label, 'value': count})
+    chart_max = max(chart_data) if chart_data else 0
+    for point in chart_points:
+        point['pct'] = int(round((point['value'] / chart_max) * 100)) if chart_max else 0
 
     category_counts = all_tickets.values('category').annotate(count=Count('id')).order_by('-count')
 
@@ -284,6 +290,8 @@ def dashboard(request):
         'avg_resolution': avg_resolution,
         'chart_labels': json.dumps(chart_labels),
         'chart_data': json.dumps(chart_data),
+        'chart_points': chart_points,
+        'chart_max': chart_max,
         'cat_resolution': cat_resolution,
         'my_productivity': my_productivity,
         'my_resolved': my_resolved,
