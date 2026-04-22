@@ -67,6 +67,8 @@ def settings_home(request):
     categories = TicketCategory.objects.prefetch_related('subcategories').all()
     category_rows = []
     for category in categories:
+        # Ticket.category is a CharField matching the Ticket.CATEGORY_CHOICES slugs,
+        # not a FK — match by slug (which equals the choice key)
         item_count = Ticket.objects.filter(category=category.slug).count()
         category_rows.append({
             'name': category.name,
@@ -125,6 +127,7 @@ def save_smtp(request):
     cfg.port = int(request.POST.get('port', 587) or 587)
     cfg.username = request.POST.get('username', '').strip()
     cfg.use_tls = request.POST.get('use_tls') == 'on'
+    cfg.use_ssl = request.POST.get('use_ssl') == 'on'
     cfg.is_active = request.POST.get('is_active') == 'on'
     pw = request.POST.get('password', '').strip()
     if pw:
@@ -136,6 +139,7 @@ def save_smtp(request):
     dj_settings.EMAIL_HOST_USER = cfg.username
     dj_settings.EMAIL_HOST_PASSWORD = cfg.password
     dj_settings.EMAIL_USE_TLS = cfg.use_tls
+    dj_settings.EMAIL_USE_SSL = getattr(cfg, 'use_ssl', False)
     _log(request.user, 'email_smtp', 'save', 'success', 'SMTP settings saved')
     messages.success(request, 'SMTP settings saved.')
     return redirect('settings_home')
@@ -305,12 +309,23 @@ def test_connection(request, integration):
 def _test_smtp(cfg):
     try:
         import smtplib
-        server = smtplib.SMTP(cfg.host, cfg.port or 587, timeout=8)
-        if cfg.use_tls:
-            server.starttls()
+        use_ssl = getattr(cfg, 'use_ssl', False)
+        port = cfg.port or (465 if use_ssl else 587)
+        if use_ssl:
+            server = smtplib.SMTP_SSL(cfg.host, port, timeout=8)
+        else:
+            server = smtplib.SMTP(cfg.host, port, timeout=8)
+            if cfg.use_tls:
+                server.starttls()
         server.login(cfg.username, cfg.password)
         server.quit()
-        return True, 'SMTP connection successful.'
+        return True, f'SMTP connection successful (port {port}).'
+    except ConnectionRefusedError:
+        return False, f'SMTP error: Connection refused on port {cfg.port}. On Railway, try port 465 with SSL or use a relay service (Mailgun/Resend) on port 2525.'
+    except OSError as e:
+        if 'unreachable' in str(e).lower() or '101' in str(e):
+            return False, f'SMTP error: Network unreachable. Railway blocks port 587 outbound. Switch to port 465 (SSL) or use Mailgun/Resend/SendGrid on port 2525.'
+        return False, f'SMTP error: {e}'
     except Exception as e:
         return False, f'SMTP error: {e}'
 

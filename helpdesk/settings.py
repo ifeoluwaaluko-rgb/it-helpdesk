@@ -115,10 +115,17 @@ IMAP_PASSWORD = os.environ.get('IMAP_PASSWORD', '')
 IMAP_FOLDER = 'INBOX'
 
 # SMTP
+# NOTE: Railway and some cloud platforms block outbound port 587 (STARTTLS).
+# If you see "Network is unreachable", switch to port 465 with SSL:
+#   EMAIL_PORT=465, EMAIL_USE_SSL=True, EMAIL_USE_TLS=False
+# Or use a transactional relay (Mailgun, Resend, SendGrid) that supports
+# outbound SMTP on port 2525 which Railway allows.
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_USE_TLS = True
+_email_port = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_PORT = _email_port
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').strip().lower() == 'true'
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').strip().lower() == 'true'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'IT Helpdesk <noreply@helpdesk.com>')

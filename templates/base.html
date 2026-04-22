@@ -198,8 +198,9 @@ function closeSidebar() {
     }
   }
 
-  function upgradeDateNodes() {
-    document.querySelectorAll('[data-local-dt]').forEach(function (el) {
+  window.upgradeDateNodes = function upgradeDateNodes(scope) {
+    const root = scope || document;
+    root.querySelectorAll('[data-local-dt]').forEach(function (el) {
       const iso = el.getAttribute('data-local-dt');
       const style = el.getAttribute('data-local-style') || 'datetime';
       let options = { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
@@ -211,12 +212,12 @@ function closeSidebar() {
       const rendered = formatLocalDate(iso, options);
       if (rendered) el.textContent = rendered;
     });
-  }
+  };
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', upgradeDateNodes);
+    document.addEventListener('DOMContentLoaded', function () { window.upgradeDateNodes(document); });
   } else {
-    upgradeDateNodes();
+    window.upgradeDateNodes(document);
   }
 })();
 </script>

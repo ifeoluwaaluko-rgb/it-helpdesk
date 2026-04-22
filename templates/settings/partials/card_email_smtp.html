@@ -26,7 +26,9 @@
 <div><label class="zd-label">Username</label><input name="username" value="{{ configs.email_smtp.username }}" class="zd-input" placeholder="it@company.com"></div>
 <div><label class="zd-label">Password / App Password</label><input name="password" type="password" class="zd-input" placeholder="{{ configs.email_smtp.masked_password }}"></div>
 <div class="sm:col-span-2 flex items-center gap-6">
-  <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="use_tls" {% if configs.email_smtp.use_tls %}checked{% endif %}> Use TLS</label>
+  <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="use_tls" {% if configs.email_smtp.use_tls %}checked{% endif %}> Use TLS (port 587)</label>
+  <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="use_ssl" {% if configs.email_smtp.use_ssl %}checked{% endif %}> Use SSL (port 465)</label>
+  <div class="text-xs text-amber-600 mt-1">⚠️ Railway blocks port 587. Use port 465 + SSL, or a relay service (Mailgun / Resend) on port 2525.</div>
   <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" {% if configs.email_smtp.is_active %}checked{% endif %}> Active</label>
 </div>
 

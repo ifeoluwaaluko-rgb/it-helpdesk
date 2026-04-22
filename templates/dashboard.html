@@ -4,6 +4,7 @@
 {% block breadcrumb %}Dashboard{% endblock %}
 {% block content %}
 <div data-dashboard-page="1"></div>
+<div id="dashboard-live-region">
 {% if is_manager %}
 <!-- ══ MANAGER VIEW ══ -->
 <div class="flex items-center justify-between mb-5">
@@ -226,16 +227,40 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   if (!document.querySelector('[data-dashboard-page]')) return;
-  setInterval(function () {
-    if (document.hidden) return;
-    window.location.reload();
-  }, 15000);
+  const region = document.getElementById('dashboard-live-region');
+  if (!region) return;
+  let busy = false;
+
+  async function silentRefreshDashboard() {
+    if (busy || document.hidden) return;
+    busy = true;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('_partial', 'dashboard');
+      url.searchParams.set('_ts', Date.now().toString());
+      const response = await fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' });
+      if (!response.ok) return;
+      const html = await response.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const nextRegion = doc.getElementById('dashboard-live-region');
+      if (!nextRegion) return;
+      region.innerHTML = nextRegion.innerHTML;
+      if (window.upgradeDateNodes) window.upgradeDateNodes(region);
+    } catch (e) {
+      console.debug('Dashboard silent refresh skipped', e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  setInterval(silentRefreshDashboard, 5000);
 });
 </script>
 {% endblock %}
