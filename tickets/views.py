@@ -6,7 +6,8 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models import Count, Q
 from django.contrib import messages
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse, Http404, FileResponse
+from django.conf import settings
 from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment
 from .classifier import classify, CATEGORY_TREE
 from .assignment import auto_assign
@@ -18,6 +19,21 @@ from datetime import date, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+@login_required
+def protected_media(request, path):
+    """Serve uploaded media in production, including email attachments."""
+    media_root = Path(settings.MEDIA_ROOT).resolve()
+    requested = (media_root / path).resolve()
+    if not str(requested).startswith(str(media_root)):
+        raise Http404("File not found")
+    if not requested.exists() or not requested.is_file():
+        raise Http404("File not found")
+    content_type, _ = mimetypes.guess_type(str(requested))
+    return FileResponse(open(requested, 'rb'), content_type=content_type or 'application/octet-stream')
+
+
 
 ALLOWED_ATTACHMENT_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.pdf', '.docx', '.xlsx', '.txt', '.zip'}
 MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -281,44 +297,16 @@ def ticket_detail(request, pk):
         elif action == 'update_status':
             new_status = request.POST.get('status', '').strip()
             valid_statuses = [s for s, _ in Ticket.STATUS_CHOICES]
-
-            if not new_status or new_status not in valid_statuses:
-                messages.error(request, 'Invalid status selection.')
-                return redirect('ticket_detail', pk=pk)
-
-            try:
+            if new_status and new_status in valid_statuses:
                 old_status = ticket.status
-                update_fields = ['status', 'updated_at']
-
                 ticket.status = new_status
-
-                if new_status == 'resolved':
-                    if not ticket.resolved_at:
-                        ticket.resolved_at = timezone.now()
-                        update_fields.append('resolved_at')
-                elif new_status in ['open', 'in_progress', 'pending'] and ticket.resolved_at:
-                    ticket.resolved_at = None
-                    update_fields.append('resolved_at')
-
-                ticket.save(update_fields=update_fields)
-
+                if new_status == 'resolved' and not ticket.resolved_at:
+                    ticket.resolved_at = timezone.now()
+                ticket.save()
                 if new_status in ['in_progress', 'pending', 'resolved', 'closed']:
                     _mark_first_response(ticket)
-
                 if new_status != old_status:
-                    try:
-                        notify_status_change(ticket, request.user)
-                    except Exception:
-                        logger.exception('Failed to send status change notification for ticket %s', ticket.id)
-                    messages.success(
-                        request,
-                        f'Ticket #{ticket.id} status updated from {ticket.get_status_display() if old_status == new_status else dict(Ticket.STATUS_CHOICES).get(old_status, old_status)} to {ticket.get_status_display()}.'
-                    )
-                else:
-                    messages.info(request, f'Ticket #{ticket.id} is already marked as {ticket.get_status_display()}.')
-            except Exception:
-                logger.exception('Failed to update status for ticket %s', ticket.id)
-                messages.error(request, 'We could not update the ticket status. Please try again.')
+                    notify_status_change(ticket, request.user)
 
         elif action == 'reassign' and can_assign(request.user):
             uid = request.POST.get('user_id', '').strip()
