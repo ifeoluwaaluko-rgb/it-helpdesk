@@ -43,7 +43,7 @@ def decrypt_value(ciphertext: str) -> str:
         return ciphertext or ''
     try:
         return f.decrypt(ciphertext.encode()).decode()
-    except Exception:
+    except (ValueError, TypeError):
         return ''   # corrupted / wrong key — return empty, never crash
 
 

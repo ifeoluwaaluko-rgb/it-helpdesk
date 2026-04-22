@@ -4,6 +4,6 @@ def user_role(request):
     if request.user.is_authenticated:
         try:
             role = request.user.profile.role
-        except Exception:
+        except AttributeError:
             role = 'associate'
     return {'role': role, 'role_display': role.title()}

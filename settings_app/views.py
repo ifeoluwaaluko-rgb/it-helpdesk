@@ -6,13 +6,14 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.conf import settings as dj_settings
 from .models import IntegrationConfig, IntegrationAuditLog
+from .mail import get_outbound_mail_config
 from tickets.models import TicketCategory, TicketSubcategory, Ticket
 
 
 def _role(user):
     try:
         return user.profile.role
-    except Exception:
+    except AttributeError:
         return ''
 
 
@@ -295,7 +296,7 @@ def test_connection(request, integration):
             ok, msg = _test_openai(cfg)
         else:
             ok, msg = False, 'Unknown integration.'
-    except Exception as exc:
+    except (ValueError, OSError) as exc:
         ok, msg = False, str(exc)
 
     _log(request.user, integration, 'test', 'success' if ok else 'error', msg)

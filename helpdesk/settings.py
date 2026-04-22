@@ -102,10 +102,43 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+USE_S3_STORAGE = os.environ.get('USE_S3_STORAGE', 'False').strip().lower() == 'true'
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', '')
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN', '')
+AWS_DEFAULT_ACL = None
+AWS_QUERYSTRING_AUTH = False
+AWS_S3_FILE_OVERWRITE = False
+
+if USE_S3_STORAGE and AWS_STORAGE_BUCKET_NAME:
+    INSTALLED_APPS.append('storages')
+    STORAGES = {
+        'default': {
+            'BACKEND': 'storages.backends.s3.S3Storage',
+            'OPTIONS': {
+                'bucket_name': AWS_STORAGE_BUCKET_NAME,
+                'region_name': AWS_S3_REGION_NAME or None,
+                'access_key': AWS_ACCESS_KEY_ID or None,
+                'secret_key': AWS_SECRET_ACCESS_KEY or None,
+                'default_acl': AWS_DEFAULT_ACL,
+                'querystring_auth': AWS_QUERYSTRING_AUTH,
+                'file_overwrite': AWS_S3_FILE_OVERWRITE,
+                'custom_domain': AWS_S3_CUSTOM_DOMAIN or None,
+            },
+        },
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+    }
+    MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/" if AWS_S3_CUSTOM_DOMAIN else f"https://{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/"
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/login/'
+
+EMAIL_ENABLED = os.environ.get('EMAIL_ENABLED', 'False').strip().lower() == 'true'
+EMAIL_POLL_SECONDS = max(15, int(os.environ.get('EMAIL_POLL_SECONDS', '15')))
 
 # IMAP
 IMAP_HOST = os.environ.get('IMAP_HOST', 'imap.gmail.com')
@@ -154,3 +187,4 @@ LOGGING = {
         },
     },
 }
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '5'))

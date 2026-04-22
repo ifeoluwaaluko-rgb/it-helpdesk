@@ -1,44 +1,54 @@
+
 """
 Email notifications for ticket events.
-Configure SMTP settings in settings.py / environment variables.
+Outbound email is optional and should never break request or worker flows.
 """
 import logging
+import smtplib
+from socket import timeout as SocketTimeout
+from email.mime.text import MIMEText
 
 from django.conf import settings
-from django.core.mail import send_mail
+
+from settings_app.mail import get_outbound_mail_config
 
 logger = logging.getLogger(__name__)
 
 
 def _safe_send(subject, body, recipients):
-    """
-    Best-effort email sender.
-
-    Never raise back into request flow. Email problems must not break
-    ticket creation, assignment, or status updates.
-    """
     recipients = [email for email in recipients if email]
     if not recipients:
         return False
 
+    cfg = get_outbound_mail_config()
+    if not cfg.enabled:
+        logger.info("Outbound email disabled; skipping notification to %s", recipients)
+        return False
+
     try:
-        result = send_mail(
-            subject=subject,
-            message=body,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-            recipient_list=recipients,
-            fail_silently=True,
-        )
-        return bool(result)
-    except BaseException as exc:
-        # Catch BaseException as well because some runtime/email backends can
-        # surface non-Exception failures during connection/setup.
-        logger.exception("Notification send failed: %s", exc)
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = cfg.from_email
+        msg['To'] = ', '.join(recipients)
+
+        if cfg.use_ssl:
+            server = smtplib.SMTP_SSL(cfg.host, cfg.port, timeout=getattr(settings, 'EMAIL_TIMEOUT', 5))
+        else:
+            server = smtplib.SMTP(cfg.host, cfg.port, timeout=getattr(settings, 'EMAIL_TIMEOUT', 5))
+            if cfg.use_tls:
+                server.starttls()
+
+        if cfg.username and cfg.password:
+            server.login(cfg.username, cfg.password)
+        server.sendmail(cfg.from_email, recipients, msg.as_string())
+        server.quit()
+        return True
+    except (smtplib.SMTPException, OSError, SocketTimeout) as exc:
+        logger.warning("Notification send failed: %s", exc, exc_info=True)
         return False
 
 
 def notify_ticket_received(ticket):
-    """Send an acknowledgment to the requester as soon as a ticket is created."""
     subject = f"[Helpdesk] Ticket #{ticket.id} received: {ticket.title}"
     body = f"""Hi,
 
@@ -57,12 +67,11 @@ Our IT team will review it shortly. Please keep this ticket number for future fo
 
 
 def notify_assignment(ticket, assignee):
-    """Send email to staff member when a ticket is assigned to them."""
     name = assignee.get_full_name() or assignee.username or "there"
     subject = f"[Helpdesk] Ticket #{ticket.id} assigned to you: {ticket.title}"
     body = f"""Hi {name},
 
-A new ticket has been assigned to you.
+A ticket has been assigned to you.
 
 Ticket: #{ticket.id} — {ticket.title}
 Priority: {ticket.get_priority_display()}
@@ -81,7 +90,6 @@ Please log in to the helpdesk to action this ticket.
 
 
 def notify_status_change(ticket, changed_by):
-    """Notify the requester when their ticket status changes."""
     status_note = (
         "Your issue has been resolved. If you still experience the problem, please reply to this email or contact IT."
         if ticket.status == 'resolved'
