@@ -63,7 +63,7 @@
   <!-- Chart -->
   <div class="lg:col-span-2 zd-card p-5">
     <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Ticket Volume — Last 7 Days</h3>
-    <canvas id="volumeChart" height="80"></canvas>
+    <canvas id="volumeChart" height="80" data-labels="{{ chart_labels|safe }}" data-values="{{ chart_data|safe }}"></canvas>
   </div>
   <!-- Category -->
   <div class="zd-card p-5">
@@ -115,7 +115,7 @@
             <p class="text-xs text-[#2f3941] font-medium truncate">{{ s.get_full_name|default:s.username }}</p>
             <span class="text-xs font-bold ml-2 {% if s.open_count > 5 %}text-red-500{% elif s.open_count > 2 %}text-orange-500{% else %}text-green-600{% endif %}">{{ s.open_count }}</span>
           </div>
-          <div class="h-1.5 bg-gray-100 rounded-full"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:{% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%"></div></div>
+          <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:min({% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%, 100%)"></div></div>
         </div>
       </div>
       {% endfor %}
@@ -129,7 +129,7 @@
       {% for cat, seconds in cat_resolution.items %}
       <div class="flex items-center gap-3">
         <span class="text-xs text-[#68737d] w-20 capitalize flex-shrink-0">{{ cat }}</span>
-        <div class="flex-1 h-1.5 bg-gray-100 rounded-full"><div class="h-full bg-[#1f8c8c] rounded-full" style="width:{% widthratio seconds 172800 100 %}%"></div></div>
+        <div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-[#1f8c8c] rounded-full" style="width:min({% widthratio seconds 172800 100 %}%, 100%)"></div></div>
         <span class="text-xs font-semibold text-[#2f3941] w-8 text-right">{{ seconds|human_duration }}</span>
       </div>
       {% endfor %}
@@ -231,13 +231,54 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   if (!document.querySelector('[data-dashboard-page]')) return;
   const region = document.getElementById('dashboard-live-region');
   if (!region) return;
-  let busy = false;
 
+  // ── Chart initialisation (called on first load and after each silent refresh)
+  let chartInstance = null;
+  function initVolumeChart() {
+    const canvas = document.getElementById('volumeChart');
+    if (!canvas) return;
+    // Chart.js keeps a registry; destroy any previous instance on the same canvas
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+    const labels = canvas.getAttribute('data-labels');
+    const data   = canvas.getAttribute('data-values');
+    if (!labels || !data) return;
+    chartInstance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: JSON.parse(labels),
+        datasets: [{
+          label: 'Tickets',
+          data: JSON.parse(data),
+          backgroundColor: 'rgba(31,115,183,0.18)',
+          borderColor: '#1f73b7',
+          borderWidth: 2,
+          borderRadius: 4,
+          hoverBackgroundColor: 'rgba(31,115,183,0.35)',
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1, color: '#68737d', font: { size: 11 } }, grid: { color: '#e9ebed' } },
+          x: { ticks: { color: '#68737d', font: { size: 11 } }, grid: { display: false } }
+        }
+      }
+    });
+  }
+  initVolumeChart();
+
+  // ── Silent background refresh ──────────────────────────────────────────────
+  let busy = false;
   async function silentRefreshDashboard() {
     if (busy || document.hidden) return;
     busy = true;
@@ -253,6 +294,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!nextRegion) return;
       region.innerHTML = nextRegion.innerHTML;
       if (window.upgradeDateNodes) window.upgradeDateNodes(region);
+      initVolumeChart();  // reinitialise chart after DOM replacement
     } catch (e) {
       console.debug('Dashboard silent refresh skipped', e);
     } finally {
