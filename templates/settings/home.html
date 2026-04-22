@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}Integrations – IT Helpdesk{% endblock %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-xl font-bold text-gray-900">🔌 Integrations</h1>
+  <p class="text-sm text-gray-500 mt-1">Manager-only connection settings for email, webhooks, chat, and AI. Secrets are masked and encrypted at rest.</p>
+</div>
+
+{% if messages %}
+  {% for m in messages %}
+  <div class="mb-4 px-4 py-3 rounded-lg text-sm {% if 'success' in m.tags %}bg-green-50 text-green-700 border border-green-200{% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">
+    {{ m }}
+  </div>
+  {% endfor %}
+{% endif %}
+
+<div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700 mb-6">
+  🔒 Best-practice mode: saved passwords and API keys are encrypted before database storage. Existing secrets are never shown back in the browser.
+</div>
+
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+
+  {% include 'settings/partials/card_email_smtp.html' %}
+  {% include 'settings/partials/card_email_imap.html' %}
+  {% include 'settings/partials/card_graph.html' %}
+  {% include 'settings/partials/card_generic_webhook.html' %}
+  {% include 'settings/partials/card_whatsapp.html' %}
+  {% include 'settings/partials/card_teams.html' %}
+  {% include 'settings/partials/card_slack.html' %}
+  {% include 'settings/partials/card_openai.html' %}
+
+</div>
+
+<div class="mt-6 zd-card">
+  <div class="px-5 py-4 border-b border-[#e9ebed]">
+    <h2 class="font-semibold text-[#2f3941]">Recent integration activity</h2>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-[#f9fafb] text-[#68737d]">
+        <tr>
+          <th class="text-left px-4 py-3">When</th>
+          <th class="text-left px-4 py-3">Integration</th>
+          <th class="text-left px-4 py-3">Action</th>
+          <th class="text-left px-4 py-3">Status</th>
+          <th class="text-left px-4 py-3">By</th>
+          <th class="text-left px-4 py-3">Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in recent_logs %}
+        <tr class="border-t border-[#e9ebed]">
+          <td class="px-4 py-3 text-[#68737d]">{{ log.created_at|date:"M d, Y H:i" }}</td>
+          <td class="px-4 py-3">{{ log.integration }}</td>
+          <td class="px-4 py-3 capitalize">{{ log.action }}</td>
+          <td class="px-4 py-3">
+            <span class="tag {% if log.status == 'success' %}bg-green-100 text-green-700{% else %}bg-red-100 text-red-700{% endif %}">{{ log.status }}</span>
+          </td>
+          <td class="px-4 py-3">{{ log.actor.username|default:"—" }}</td>
+          <td class="px-4 py-3 text-[#68737d]">{{ log.message|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="px-4 py-6 text-center text-[#68737d]">No integration activity yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function toggleIntegration(id) {
+  document.getElementById(id).classList.toggle('hidden');
+}
+async function testConn(integration, btn) {
+  const original = btn.textContent;
+  btn.textContent = 'Testing...';
+  btn.disabled = true;
+  try {
+    const resp = await fetch(`/settings/test/${integration}/`);
+    const data = await resp.json();
+    alert(data.msg || (data.ok ? 'Connection OK' : 'Connection failed'));
+  } catch (e) {
+    alert('Could not test this connection right now.');
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

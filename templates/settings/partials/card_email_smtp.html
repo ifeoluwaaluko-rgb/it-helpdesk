@@ -1,0 +1,38 @@
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">📤</span>
+      <div>
+        <h2 class="text-sm font-bold text-gray-800">Email – SMTP (Outbound)</h2>
+        <p class="text-xs text-gray-400">Send notifications and replies</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if configs.email_smtp.is_configured %}
+      <span class="tag bg-green-100 text-green-700">Configured</span>
+      {% else %}
+      <span class="tag bg-gray-100 text-gray-600">Not set</span>
+      {% endif %}
+      <button type="button" onclick="testConn('email_smtp', this)" class="zd-btn zd-btn-secondary text-xs">Test</button>
+      <button type="button" onclick="toggleIntegration('smtp-card')" class="zd-btn zd-btn-primary text-xs">Configure</button>
+    </div>
+  </div>
+  <div id="smtp-card" class="hidden px-6 py-5">
+    <form method="post" action="{% url 'save_smtp' %}" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {% csrf_token %}
+      
+<div><label class="zd-label">SMTP Host</label><input name="host" value="{{ configs.email_smtp.host }}" class="zd-input" placeholder="smtp.gmail.com"></div>
+<div><label class="zd-label">Port</label><input name="port" type="number" value="{{ configs.email_smtp.port|default:'587' }}" class="zd-input"></div>
+<div><label class="zd-label">Username</label><input name="username" value="{{ configs.email_smtp.username }}" class="zd-input" placeholder="it@company.com"></div>
+<div><label class="zd-label">Password / App Password</label><input name="password" type="password" class="zd-input" placeholder="{{ configs.email_smtp.masked_password }}"></div>
+<div class="sm:col-span-2 flex items-center gap-6">
+  <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="use_tls" {% if configs.email_smtp.use_tls %}checked{% endif %}> Use TLS</label>
+  <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" {% if configs.email_smtp.is_active %}checked{% endif %}> Active</label>
+</div>
+
+      <div class="sm:col-span-2 pt-2">
+        <button class="zd-btn zd-btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>

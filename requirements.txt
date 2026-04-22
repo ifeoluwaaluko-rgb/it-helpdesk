@@ -1,0 +1,5 @@
+gunicorn==25.3.0
+psycopg2-binary==2.9.11
+whitenoise==6.12.0
+Django==5.2
+cryptography==42.0.8

@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block title %}Tickets — IT Helpdesk{% endblock %}
+{% block breadcrumb %}Tickets{% endblock %}
+{% block content %}
+
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+  <div>
+    <h1 class="text-lg font-bold text-[#2f3941]">Tickets</h1>
+    <p class="text-xs text-[#68737d]">{{ result_count }} ticket{{ result_count|pluralize }}</p>
+  </div>
+  <a href="{% url 'create_ticket' %}" class="zd-btn zd-btn-primary">+ New Ticket</a>
+</div>
+
+<!-- Filters -->
+<div class="zd-card p-4 mb-4">
+  <form method="get" class="flex flex-wrap gap-3 items-end">
+    <div class="flex-1 min-w-48">
+      <label class="zd-label">Search</label>
+      <input name="q" value="{{ filters.q|default:'' }}" placeholder="Search title, requester, email..."
+        class="zd-input">
+    </div>
+    <div>
+      <label class="zd-label">Status</label>
+      <select name="status" class="zd-select w-auto">
+        <option value="">All statuses</option>
+        {% for val, label in status_choices %}<option value="{{ val }}" {% if filters.status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="zd-label">Priority</label>
+      <select name="priority" class="zd-select w-auto">
+        <option value="">All priorities</option>
+        {% for val, label in priority_choices %}<option value="{{ val }}" {% if filters.priority == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="zd-label">Category</label>
+      <select name="category" class="zd-select w-auto">
+        <option value="">All categories</option>
+        {% for val, label in category_choices %}<option value="{{ val }}" {% if filters.category == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="flex items-center gap-4 pb-0.5">
+      <label class="flex items-center gap-1.5 text-xs text-[#2f3941] cursor-pointer font-medium"><input type="checkbox" name="mine" value="1" {% if filters.mine == '1' %}checked{% endif %} class="rounded"> Mine only</label>
+      <label class="flex items-center gap-1.5 text-xs text-orange-600 cursor-pointer font-medium"><input type="checkbox" name="unassigned" value="1" {% if filters.unassigned == '1' %}checked{% endif %} class="rounded"> Unassigned</label>
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="zd-btn zd-btn-primary">Apply</button>
+      <a href="{% url 'ticket_list' %}" class="zd-btn zd-btn-secondary">Clear</a>
+    </div>
+  </form>
+</div>
+
+<!-- Table -->
+<div class="zd-card overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-[#f3f4f6] border-b border-[#d8dcde]">
+      <tr class="text-left text-xs text-[#68737d] uppercase font-semibold">
+        <th class="px-4 py-3">ID</th>
+        <th class="px-4 py-3">Subject</th>
+        <th class="px-4 py-3 hidden md:table-cell">Requester</th>
+        <th class="px-4 py-3 hidden lg:table-cell">Category</th>
+        <th class="px-4 py-3">Priority</th>
+        <th class="px-4 py-3 hidden md:table-cell">Assignee</th>
+        <th class="px-4 py-3">Status</th>
+        <th class="px-4 py-3 hidden lg:table-cell">Created</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-[#e9ebed]">
+    {% for t in tickets %}
+    <tr class="hover:bg-[#f9fafb] transition-colors {% if t.is_sla_breached %}bg-red-50 hover:bg-red-50{% endif %}">
+      <td class="px-4 py-3 text-[#68737d] text-xs font-mono">#{{ t.id }}</td>
+      <td class="px-4 py-3">
+        <a href="{% url 'ticket_detail' t.pk %}" class="font-medium text-[#1f73b7] hover:underline">{{ t.title|truncatechars:48 }}</a>
+        {% if t.is_sla_breached %}<span class="ml-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold">SLA!</span>{% endif %}
+        {% if t.channel == 'email' %}<span class="ml-1 tag">📧 Email</span>{% elif t.channel == 'walk_in' %}<span class="ml-1 tag">🚶 Walk-in</span>{% elif t.channel == 'phone' %}<span class="ml-1 tag">📞 Phone</span>{% elif t.channel == 'chat' %}<span class="ml-1 tag">💬 Chat</span>{% endif %}
+      </td>
+      <td class="px-4 py-3 text-xs text-[#68737d] hidden md:table-cell">{{ t.requester_name|default:t.user_email|truncatechars:22 }}</td>
+      <td class="px-4 py-3 text-xs text-[#68737d] hidden lg:table-cell capitalize">
+        {{ t.get_category_display }}{% if t.subcategory %}<br><span class="text-[#c2c8cc]">{{ t.subcategory }}</span>{% endif %}
+      </td>
+      <td class="px-4 py-3">{% include 'partials/priority_badge.html' with priority=t.priority %}</td>
+      <td class="px-4 py-3 text-xs text-[#68737d] hidden md:table-cell">
+        {% if t.assigned_to %}{{ t.assigned_to.get_full_name|default:t.assigned_to.username }}
+        {% else %}<span class="text-orange-500 font-semibold">Unassigned</span>{% endif %}
+      </td>
+      <td class="px-4 py-3">{% include 'partials/status_badge.html' with status=t.status %}</td>
+      <td class="px-4 py-3 text-xs text-[#68737d] hidden lg:table-cell">{{ t.created_at|date:"M d, H:i" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="8" class="px-4 py-12 text-center text-[#68737d]">No tickets found.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

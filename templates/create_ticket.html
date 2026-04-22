@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}New Ticket{% endblock %}
+{% block breadcrumb %}<a href="{% url 'ticket_list' %}">Tickets</a> / New{% endblock %}
+{% block content %}
+<div class="max-w-2xl">
+  <h1 class="text-lg font-bold text-[#2f3941] mb-4">Create Ticket</h1>
+  <div class="zd-card p-6">
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
+      {% csrf_token %}
+
+      <!-- Staff search -->
+      <div>
+        <label class="zd-label">Requester <span class="text-red-500">*</span></label>
+        <div class="relative">
+          <input type="text" id="staff-search" placeholder="Search by name or email..."
+            autocomplete="off" class="zd-input pr-8">
+          <div id="staff-dropdown" class="absolute z-20 w-full bg-white border border-[#d8dcde] rounded-md shadow-lg mt-1 hidden max-h-52 overflow-y-auto"></div>
+        </div>
+        <input type="hidden" id="staff-id" name="staff_member">
+        <p id="selected-staff" class="text-xs text-[#1f8c8c] mt-1 hidden font-medium"></p>
+        <p class="text-xs text-[#68737d] mt-1">Or enter email manually if not in directory:</p>
+        <input type="email" id="email-manual" name="user_email" placeholder="staff@company.com" class="zd-input mt-1">
+      </div>
+
+      <div>
+        <label class="zd-label">Channel</label>
+        <select name="channel" class="zd-select">
+          {% for val, label in channel_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="zd-label">Subject <span class="text-red-500">*</span></label>
+        <input name="title" type="text" required placeholder="e.g. Cannot connect to VPN" class="zd-input">
+        <p class="text-xs text-[#68737d] mt-1">Be specific — this helps classification accuracy.</p>
+      </div>
+
+      <div>
+        <label class="zd-label">Description <span class="text-red-500">*</span></label>
+        <textarea name="description" rows="5" required placeholder="Describe the issue in detail..." class="zd-input resize-none"></textarea>
+      </div>
+
+
+      <div>
+        <label class="zd-label">Attachment (optional)</label>
+        <input name="attachment" type="file" class="zd-input" accept=".jpg,.jpeg,.png,.gif,.pdf,.docx,.xlsx,.txt,.zip">
+        <p class="text-xs text-[#68737d] mt-1">One file only. Max {{ max_attachment_mb }} MB. Allowed: {{ allowed_attachment_types }}.</p>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="zd-btn zd-btn-primary">Create Ticket</button>
+        <a href="{% url 'ticket_list' %}" class="zd-btn zd-btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+  <div class="mt-3 text-xs text-[#68737d] bg-[#f3f4f6] rounded px-4 py-3 border border-[#d8dcde]">
+    💡 The ticket will be automatically classified and assigned based on the subject and description.
+  </div>
+</div>
+
+<script>
+const searchInput = document.getElementById('staff-search');
+const dropdown = document.getElementById('staff-dropdown');
+const staffId = document.getElementById('staff-id');
+const emailInput = document.getElementById('email-manual');
+const selectedLabel = document.getElementById('selected-staff');
+let debounce;
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(debounce);
+  const q = searchInput.value.trim();
+  if (q.length < 2) { dropdown.classList.add('hidden'); return; }
+  debounce = setTimeout(() => {
+    fetch(`/api/staff/search/?q=${encodeURIComponent(q)}`)
+      .then(r => r.json())
+      .then(data => {
+        dropdown.innerHTML = '';
+        if (!data.results.length) { dropdown.classList.add('hidden'); return; }
+        data.results.forEach(m => {
+          const div = document.createElement('div');
+          div.className = 'px-4 py-3 hover:bg-[#f3f4f6] cursor-pointer text-sm border-b border-[#e9ebed] last:border-0';
+          div.innerHTML = `<p class="font-medium text-[#2f3941]">${m.name}</p><p class="text-xs text-[#68737d]">${m.email}${m.department ? ' · '+m.department : ''}</p>`;
+          div.onclick = () => {
+            staffId.value = m.id;
+            emailInput.value = m.email;
+            searchInput.value = m.name;
+            selectedLabel.textContent = `✓ ${m.name} — ${m.email}`;
+            selectedLabel.classList.remove('hidden');
+            dropdown.classList.add('hidden');
+          };
+          dropdown.appendChild(div);
+        });
+        dropdown.classList.remove('hidden');
+      });
+  }, 200);
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#staff-search') && !e.target.closest('#staff-dropdown'))
+    dropdown.classList.add('hidden');
+});
+</script>
+{% endblock %}

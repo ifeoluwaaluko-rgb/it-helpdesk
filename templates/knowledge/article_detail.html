@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% block title %}{{ article.title }} – Knowledge Base{% endblock %}
+{% block content %}
+
+<div class="max-w-3xl mx-auto">
+  <div class="mb-4 flex items-center justify-between">
+    <a href="{% url 'article_list' %}" class="text-sm text-gray-400 hover:text-blue-600">← Knowledge Base</a>
+    <div class="flex gap-2">
+      <a href="{% url 'article_history' article.pk %}" class="zd-btn zd-btn-secondary text-xs">🕓 History ({{ article.revisions.count }})</a>
+      <a href="{% url 'edit_article' article.pk %}" class="zd-btn zd-btn-primary text-xs">✏️ Edit</a>
+      {% if can_delete %}
+      <button onclick="document.getElementById('delete-modal').classList.remove('hidden')" class="zd-btn zd-btn-danger text-xs">🗑 Delete</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-8">
+    <div class="mb-6">
+      <div class="flex items-start justify-between gap-4 mb-3">
+        <h1 class="text-2xl font-bold text-gray-800">{{ article.title }}</h1>
+        <span class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-medium flex-shrink-0">{{ article.get_category_display }}</span>
+      </div>
+      <div class="text-xs text-gray-400 space-y-1">
+        <div>📝 Created by <span class="font-medium text-gray-600">{{ article.created_by.get_full_name|default:article.created_by.username|default:"System" }}</span> on {{ article.created_at|date:"M d, Y" }}</div>
+        {% if article.last_modified_by and article.revisions.count > 0 %}
+        <div>✏️ Last modified by <span class="font-medium text-gray-600">{{ article.last_modified_by.get_full_name|default:article.last_modified_by.username }}</span> on {{ article.updated_at|date:"M d, Y H:i" }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Content rendered as HTML (supports rich editor output) -->
+    <div class="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none">{{ decoded_content|safe }}</div>
+
+    {% if article.tag_list %}
+    <div class="mt-6 pt-4 border-t border-gray-100 flex flex-wrap gap-2">
+      {% for tag in article.tag_list %}
+      <span class="text-xs bg-gray-100 text-gray-500 px-3 py-1 rounded-full">{{ tag }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Attachments -->
+    {% if article.attachments.exists %}
+    <div class="mt-6 pt-4 border-t border-gray-100">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">📎 Attachments</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {% for att in article.attachments.all %}
+        <a href="{{ att.file.url }}" target="_blank"
+           class="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-xl p-3 hover:border-blue-300 hover:bg-blue-50 transition group">
+          {% if att.is_image %}
+          <img src="{{ att.file.url }}" alt="{{ att.filename }}" class="w-10 h-10 object-cover rounded-lg flex-shrink-0">
+          {% else %}
+          <div class="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center text-lg flex-shrink-0">📄</div>
+          {% endif %}
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-gray-700 group-hover:text-blue-700 truncate">{{ att.filename }}</p>
+            <p class="text-xs text-gray-400">{{ att.uploaded_at|date:"M d, Y" }}</p>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if article.source_ticket %}
+    <div class="mt-4 pt-4 border-t border-gray-100">
+      <p class="text-xs text-gray-400">Source: <a href="{% url 'ticket_detail' article.source_ticket.pk %}" class="text-blue-500 hover:underline">Ticket #{{ article.source_ticket.id }} – {{ article.source_ticket.title }}</a></p>
+    </div>
+    {% endif %}
+
+    <!-- Feedback -->
+    <div class="mt-6 pt-6 border-t border-gray-100">
+      <p class="text-sm font-medium text-gray-700 mb-3">Was this article helpful?</p>
+      <div class="flex items-center gap-4">
+        <button onclick="vote(true)" id="btn-helpful"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition
+          {% if user_feedback and user_feedback.helpful %}bg-green-50 border-green-300 text-green-700 font-semibold{% else %}border-gray-200 text-gray-600 hover:border-green-300 hover:text-green-600{% endif %}">
+          👍 Yes <span id="helpful-count" class="font-semibold">{{ article.helpful_count }}</span>
+        </button>
+        <button onclick="vote(false)" id="btn-not-helpful"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition
+          {% if user_feedback and not user_feedback.helpful %}bg-red-50 border-red-300 text-red-700 font-semibold{% else %}border-gray-200 text-gray-600 hover:border-red-300 hover:text-red-600{% endif %}">
+          👎 No <span id="not-helpful-count" class="font-semibold">{{ article.not_helpful_count }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirmation modal -->
+{% if can_delete %}
+<div id="delete-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 border border-gray-100">
+    <div class="text-center mb-6">
+      <div class="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">🗑</div>
+      <h2 class="text-lg font-bold text-gray-800">Delete Article?</h2>
+      <p class="text-sm text-gray-500 mt-2">You are about to permanently delete <strong>"{{ article.title }}"</strong>. This cannot be undone.</p>
+    </div>
+    <form method="post" action="{% url 'article_delete' article.pk %}">
+      {% csrf_token %}
+      <div class="flex gap-3">
+        <button type="button" onclick="document.getElementById('delete-modal').classList.add('hidden')"
+          class="flex-1 zd-btn zd-btn-secondary justify-center">Cancel</button>
+        <button type="submit" class="flex-1 zd-btn zd-btn-danger justify-center bg-red-600 text-white border-red-600 hover:bg-red-700">Yes, Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<script>
+function vote(helpful) {
+  fetch("{% url 'article_feedback' article.pk %}", {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': '{{ csrf_token }}'},
+    body: 'helpful=' + helpful
+  })
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('helpful-count').textContent = data.helpful;
+    document.getElementById('not-helpful-count').textContent = data.not_helpful;
+    document.getElementById('btn-helpful').className = `flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition ${data.user_vote ? 'bg-green-50 border-green-300 text-green-700 font-semibold' : 'border-gray-200 text-gray-600'}`;
+    document.getElementById('btn-not-helpful').className = `flex items-center gap-2 px-4 py-2 rounded-lg border text-sm transition ${!data.user_vote ? 'bg-red-50 border-red-300 text-red-700 font-semibold' : 'border-gray-200 text-gray-600'}`;
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Asset Inventory{% endblock %}
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+  <div>
+    <h1 class="text-xl font-bold text-gray-900">Asset Inventory</h1>
+    <p class="text-sm text-gray-500">
+      {{ total }} asset{{ total|pluralize }} total
+      {% if is_filtered %}&nbsp;·&nbsp;<span class="text-blue-600">{{ total_filtered }} shown after filter</span>{% endif %}
+    </p>
+  </div>
+  <div class="flex gap-2 flex-wrap">
+    <a href="{% url 'asset_import' %}" class="zd-btn zd-btn-secondary text-xs">📥 Import CSV</a>
+    <a href="{% url 'asset_template' %}" class="zd-btn zd-btn-secondary text-xs">⬇ Template</a>
+    <a href="{% url 'asset_create' %}" class="zd-btn zd-btn-primary text-xs">+ Register Asset</a>
+  </div>
+</div>
+<!-- Status summary -->
+<div class="grid grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+  {% for val, label, count in status_summary %}
+  <a href="?status={{ val }}" class="card text-center hover:border-blue-300 transition-all {% if sel_status == val %}border-blue-400 bg-blue-50{% endif %}">
+    <p class="text-2xl font-black {% if val == 'active' %}text-green-600{% elif val == 'faulty' %}text-red-600{% elif val == 'in_repair' %}text-yellow-600{% elif val == 'retired' %}text-gray-400{% else %}text-blue-600{% endif %}">{{ count }}</p>
+    <p class="text-xs text-gray-500 mt-1">{{ label }}</p>
+  </a>
+  {% endfor %}
+</div>
+<form method="get" class="card mb-5 flex flex-wrap gap-3 items-end">
+  <div class="flex-1 min-w-40"><label class="block text-xs text-gray-500 mb-1">Search</label><input name="q" value="{{ q|default:'' }}" placeholder="Name, ID, serial..." class="zd-input"></div>
+  <div><label class="block text-xs text-gray-500 mb-1">Category</label><select name="category" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none"><option value="">All</option>{% for cat in categories %}<option value="{{ cat.id }}" {% if sel_cat == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.icon }} {{ cat.name }}</option>{% endfor %}</select></div>
+  <div><label class="block text-xs text-gray-500 mb-1">Status</label><select name="status" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none"><option value="">All</option>{% for val, label in status_choices %}<option value="{{ val }}" {% if sel_status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <button type="submit" class="zd-btn zd-btn-primary">Filter</button><a href="{% url 'asset_list' %}" class="zd-btn zd-btn-secondary">Clear</a>
+</form>
+<div class="card overflow-hidden p-0">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm min-w-[600px]">
+      <thead class="bg-gray-50 border-b border-gray-100"><tr class="text-left text-xs text-gray-400 uppercase">
+        <th class="px-5 py-3 font-medium">Asset ID</th><th class="px-5 py-3 font-medium">Name</th><th class="px-5 py-3 font-medium">Category</th><th class="px-5 py-3 font-medium hidden md:table-cell">Assigned To</th><th class="px-5 py-3 font-medium">Status</th><th class="px-5 py-3 font-medium"></th>
+      </tr></thead>
+      <tbody class="divide-y divide-gray-50">
+      {% for a in assets %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-5 py-3 font-mono text-xs text-gray-600">{{ a.asset_id }}</td>
+        <td class="px-5 py-3 font-medium text-gray-800">{{ a.name }}<p class="text-xs text-gray-400 font-normal">{{ a.brand }} {{ a.model }}</p></td>
+        <td class="px-5 py-3 text-gray-500">{% if a.category %}{{ a.category.icon }} {{ a.category.name }}{% else %}—{% endif %}</td>
+        <td class="px-5 py-3 text-gray-500 hidden md:table-cell">{{ a.assigned_to.full_name|default:"Unassigned" }}</td>
+        <td class="px-5 py-3"><span class="badge {% if a.status == 'active' %}bg-green-100 text-green-700{% elif a.status == 'faulty' %}bg-red-100 text-red-700{% elif a.status == 'in_repair' %}bg-yellow-100 text-yellow-700{% elif a.status == 'retired' %}bg-gray-100 text-gray-500{% else %}bg-blue-100 text-blue-700{% endif %}">{{ a.get_status_display }}</span></td>
+        <td class="px-5 py-3"><a href="{% url 'asset_detail' a.pk %}" class="text-xs text-blue-600 hover:underline">View →</a></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="px-5 py-10 text-center text-gray-400">No assets found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

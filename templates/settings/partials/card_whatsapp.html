@@ -1,0 +1,34 @@
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">💬</span>
+      <div>
+        <h2 class="text-sm font-bold text-gray-800">WhatsApp Business</h2>
+        <p class="text-xs text-gray-400">Connect approved WhatsApp support channel</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if configs.whatsapp.is_configured %}
+      <span class="tag bg-green-100 text-green-700">Configured</span>
+      {% else %}
+      <span class="tag bg-gray-100 text-gray-600">Not set</span>
+      {% endif %}
+      <button type="button" onclick="testConn('whatsapp', this)" class="zd-btn zd-btn-secondary text-xs">Test</button>
+      <button type="button" onclick="toggleIntegration('whatsapp-card')" class="zd-btn zd-btn-primary text-xs">Configure</button>
+    </div>
+  </div>
+  <div id="whatsapp-card" class="hidden px-6 py-5">
+    <form method="post" action="{% url 'save_whatsapp' %}" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {% csrf_token %}
+      
+<div><label class="zd-label">Phone Number ID</label><input name="phone_number_id" value="{{ configs.whatsapp.phone_number_id }}" class="zd-input"></div>
+<div><label class="zd-label">Business Account ID</label><input name="wa_business_id" value="{{ configs.whatsapp.wa_business_id }}" class="zd-input"></div>
+<div class="sm:col-span-2"><label class="zd-label">Access Token</label><input name="access_token" type="password" class="zd-input" placeholder="{{ configs.whatsapp.masked_token }}"></div>
+<div class="sm:col-span-2"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" {% if configs.whatsapp.is_active %}checked{% endif %}> Active</label></div>
+
+      <div class="sm:col-span-2 pt-2">
+        <button class="zd-btn zd-btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>

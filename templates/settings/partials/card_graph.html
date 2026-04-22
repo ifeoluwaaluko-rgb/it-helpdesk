@@ -1,0 +1,34 @@
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">🪟</span>
+      <div>
+        <h2 class="text-sm font-bold text-gray-800">Microsoft Graph</h2>
+        <p class="text-xs text-gray-400">Preferred inbound/outbound connection for Microsoft 365</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if configs.microsoft_graph.is_configured %}
+      <span class="tag bg-green-100 text-green-700">Configured</span>
+      {% else %}
+      <span class="tag bg-gray-100 text-gray-600">Not set</span>
+      {% endif %}
+      <button type="button" onclick="testConn('microsoft_graph', this)" class="zd-btn zd-btn-secondary text-xs">Test</button>
+      <button type="button" onclick="toggleIntegration('graph-card')" class="zd-btn zd-btn-primary text-xs">Configure</button>
+    </div>
+  </div>
+  <div id="graph-card" class="hidden px-6 py-5">
+    <form method="post" action="{% url 'save_graph' %}" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {% csrf_token %}
+      
+<div><label class="zd-label">Tenant ID</label><input name="tenant_id" value="{{ configs.microsoft_graph.host }}" class="zd-input"></div>
+<div><label class="zd-label">Client ID</label><input name="client_id" value="{{ configs.microsoft_graph.username }}" class="zd-input"></div>
+<div><label class="zd-label">Client Secret / Token</label><input name="access_token" type="password" class="zd-input" placeholder="{{ configs.microsoft_graph.masked_token }}"></div>
+<div><label class="zd-label">Status</label><label class="flex items-center gap-2 text-sm mt-2"><input type="checkbox" name="is_active" {% if configs.microsoft_graph.is_active %}checked{% endif %}> Active</label></div>
+
+      <div class="sm:col-span-2 pt-2">
+        <button class="zd-btn zd-btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>

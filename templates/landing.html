@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IT Helpdesk – Modern ITSM for Growing Teams</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+    .gradient-text {
+      background: linear-gradient(135deg, #38bdf8, #818cf8, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .card-glow:hover { box-shadow: 0 0 40px rgba(56,189,248,0.12); }
+    .hero-grid {
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+    .stat-card { background: linear-gradient(135deg, rgba(56,189,248,0.08), rgba(129,140,248,0.08)); }
+    html { scroll-behavior: smooth; }
+    .nav-blur { backdrop-filter: blur(16px); background: rgba(3,7,18,0.8); }
+  </style>
+</head>
+<body class="bg-[#030712] text-white overflow-x-hidden">
+
+<!-- ── NAVBAR ─────────────────────────────────────────────────────────────── -->
+<nav class="nav-blur fixed top-0 left-0 right-0 z-50 border-b border-white/5">
+  <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-indigo-500 flex items-center justify-center text-white font-black text-sm">IT</div>
+      <span class="font-bold text-white text-base">Helpdesk</span>
+    </div>
+    <div class="hidden md:flex items-center gap-8 text-sm text-gray-400">
+      <a href="#features" class="hover:text-white transition">Features</a>
+      <a href="#channels" class="hover:text-white transition">Channels</a>
+      <a href="#stats" class="hover:text-white transition">Why Us</a>
+      <a href="#security" class="hover:text-white transition">Security</a>
+    </div>
+    <a href="/login/" class="bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-white text-sm font-semibold px-5 py-2 rounded-lg transition">
+      Sign In →
+    </a>
+  </div>
+</nav>
+
+<!-- ── HERO ───────────────────────────────────────────────────────────────── -->
+<section class="hero-grid relative min-h-screen flex items-center pt-16">
+  <!-- Glow blobs -->
+  <div class="absolute top-20 left-1/4 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+  <div class="absolute top-40 right-1/4 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+  <div class="max-w-7xl mx-auto px-6 py-28 text-center relative">
+    <div class="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 text-xs text-sky-400 font-medium mb-8">
+      <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+      Built for IT teams that move fast
+    </div>
+    <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] tracking-tight mb-6">
+      IT Support.<br>
+      <span class="gradient-text">Reimagined.</span>
+    </h1>
+    <p class="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed mb-10">
+      A modern ITSM platform that connects your team, resolves issues faster,
+      and keeps your organisation running — all from one place.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <a href="/login/" class="bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-white font-bold px-8 py-3.5 rounded-xl text-base transition shadow-lg shadow-sky-500/20">
+        Get Started Free
+      </a>
+      <a href="#features" class="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold px-8 py-3.5 rounded-xl text-base transition">
+        See Features ↓
+      </a>
+    </div>
+
+    <!-- Dashboard mockup -->
+    <div class="mt-20 relative mx-auto max-w-5xl">
+      <div class="bg-gradient-to-b from-white/5 to-white/0 border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/60">
+        <!-- Fake browser bar -->
+        <div class="flex items-center gap-2 px-4 py-3 bg-white/3 border-b border-white/5">
+          <div class="w-3 h-3 rounded-full bg-red-500/60"></div>
+          <div class="w-3 h-3 rounded-full bg-yellow-500/60"></div>
+          <div class="w-3 h-3 rounded-full bg-green-500/60"></div>
+          <div class="flex-1 mx-4 bg-white/5 rounded-md h-5 flex items-center px-3">
+            <span class="text-[10px] text-gray-500">https://helpdesk.yourcompany.com/dashboard</span>
+          </div>
+        </div>
+        <!-- Mock dashboard -->
+        <div class="flex min-h-[360px]">
+          <!-- Sidebar -->
+          <div class="w-44 bg-[#1a2332]/80 border-r border-white/5 p-3 space-y-1 hidden sm:block flex-shrink-0">
+            <div class="h-7 bg-[#1f73b7]/30 rounded-md flex items-center px-2 gap-2"><div class="w-3 h-3 rounded bg-sky-400/40"></div><div class="h-2 w-14 bg-white/20 rounded"></div></div>
+            <div class="h-7 rounded-md flex items-center px-2 gap-2"><div class="w-3 h-3 rounded bg-white/10"></div><div class="h-2 w-16 bg-white/10 rounded"></div></div>
+            <div class="h-7 rounded-md flex items-center px-2 gap-2"><div class="w-3 h-3 rounded bg-white/10"></div><div class="h-2 w-12 bg-white/10 rounded"></div></div>
+            <div class="mt-3 h-px bg-white/5"></div>
+            <div class="h-7 rounded-md flex items-center px-2 gap-2"><div class="w-3 h-3 rounded bg-white/10"></div><div class="h-2 w-20 bg-white/10 rounded"></div></div>
+            <div class="h-7 rounded-md flex items-center px-2 gap-2"><div class="w-3 h-3 rounded bg-white/10"></div><div class="h-2 w-14 bg-white/10 rounded"></div></div>
+          </div>
+          <!-- Main area -->
+          <div class="flex-1 p-5 bg-[#0f1623]/50">
+            <!-- KPI row -->
+            <div class="grid grid-cols-4 gap-3 mb-5">
+              <div class="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3"><div class="text-xl font-black text-blue-400">24</div><div class="text-[10px] text-gray-400 mt-0.5">Open</div></div>
+              <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3"><div class="text-xl font-black text-yellow-400">8</div><div class="text-[10px] text-gray-400 mt-0.5">In Progress</div></div>
+              <div class="bg-green-500/10 border border-green-500/20 rounded-xl p-3"><div class="text-xl font-black text-green-400">142</div><div class="text-[10px] text-gray-400 mt-0.5">Resolved</div></div>
+              <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-3"><div class="text-xl font-black text-red-400">3</div><div class="text-[10px] text-gray-400 mt-0.5">SLA Breach</div></div>
+            </div>
+            <!-- Table rows -->
+            <div class="bg-white/3 rounded-xl border border-white/5 overflow-hidden">
+              <div class="grid grid-cols-4 gap-2 px-4 py-2 border-b border-white/5 text-[9px] uppercase text-gray-500 font-semibold tracking-wider">
+                <span>Ticket</span><span>Category</span><span>Priority</span><span>Status</span>
+              </div>
+              {% for item in "xxx"|make_list %}
+              <div class="grid grid-cols-4 gap-2 px-4 py-2.5 border-b border-white/3 items-center">
+                <div class="h-2 bg-white/10 rounded w-24"></div>
+                <div class="h-2 bg-white/10 rounded w-16"></div>
+                <div class="h-2 bg-yellow-400/30 rounded w-10"></div>
+                <div class="h-2 bg-blue-400/30 rounded w-14"></div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Glow under mockup -->
+      <div class="absolute -bottom-8 left-1/2 -translate-x-1/2 w-3/4 h-20 bg-sky-500/10 blur-3xl rounded-full"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── STATS ──────────────────────────────────────────────────────────────── -->
+<section id="stats" class="py-20 border-y border-white/5 bg-white/[0.02]">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="stat-card border border-white/5 rounded-2xl p-6 text-center">
+        <p class="text-4xl font-black gradient-text">98%</p>
+        <p class="text-sm text-gray-400 mt-2">SLA Compliance Rate</p>
+      </div>
+      <div class="stat-card border border-white/5 rounded-2xl p-6 text-center">
+        <p class="text-4xl font-black gradient-text">&lt;2h</p>
+        <p class="text-sm text-gray-400 mt-2">Average Resolution Time</p>
+      </div>
+      <div class="stat-card border border-white/5 rounded-2xl p-6 text-center">
+        <p class="text-4xl font-black gradient-text">5+</p>
+        <p class="text-sm text-gray-400 mt-2">Channels Integrated</p>
+      </div>
+      <div class="stat-card border border-white/5 rounded-2xl p-6 text-center">
+        <p class="text-4xl font-black gradient-text">100%</p>
+        <p class="text-sm text-gray-400 mt-2">Web-Based, No Install</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURES ───────────────────────────────────────────────────────────── -->
+<section id="features" class="py-24">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center mb-16">
+      <p class="text-sky-400 text-sm font-semibold uppercase tracking-widest mb-3">Platform Features</p>
+      <h2 class="text-4xl lg:text-5xl font-black">Everything IT teams need.</h2>
+      <p class="text-gray-400 mt-4 text-lg max-w-xl mx-auto">From ticket creation to resolution — with smart routing, SLA tracking, and full audit history.</p>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      {% for feat in features %}{% endfor %}
+      <!-- Feature cards (static) -->
+      <div class="card-glow bg-white/3 border border-white/8 rounded-2xl p-6 transition">
+        <div class="w-11 h-11 bg-sky-500/15 rounded-xl flex items-center justify-center text-2xl mb-4">🎫</div>
+        <h3 class="font-bold text-white mb-2">Smart Ticket Management</h3>
+        <p class="text-sm text-gray-400 leading-relaxed">Auto-classify tickets by category, priority, and SLA level. Route to the right person instantly.</p>
+      </div>
+      <div class="card-glow bg-white/3 border border-white/8 rounded-2xl p-6 transition">
+        <div class="w-11 h-11 bg-indigo-500/15 rounded-xl flex items-center justify-center text-2xl mb-4">📊</div>
+        <h3 class="font-bold text-white mb-2">Live Dashboard & Analytics</h3>
+        <p class="text-sm text-gray-400 leading-relaxed">Real-time KPIs, SLA compliance, resolution trends, and staff workload — all in one view.</p>
+      </div>
+      <div class="card-glow bg-white/3 border border-white/8 rounded-2xl p-6 transition">
+        <div class="w-11 h-11 bg-purple-500/15 rounded-xl flex items-center justify-center text-2xl mb-4">📚</div>
+        <h3 class="font-bold text-white mb-2">Knowledge Base</h3>
+        <p class="text-sm text-gray-400 leading-relaxed">Rich-text articles with inline images, file attachments, version history, and staff feedback.</p>
+      </div>
+      <div class="card-glow bg-white/3 border border-white/8 rounded-2xl p-6 transition">
+        <div class="w-11 h-11 bg-green-500/15 rounded-xl flex items-center justify-center text-2xl mb-4">🖥</div>
+        <h3 class="font-bold text-white mb-2">Asset Inventory</h3>
+        <p class="text-sm text-gray-400 leading-relaxed">Track hardware assets, assignments, incident history, and status across your organisation.</p>
+      </div>
+      <div class="card-glow bg-white/3 border border-white/8 rounded-2xl p-6 transition">
+        <div class="w-11 h-11 bg-yellow-500/15 rounded-xl flex items-center justify-center text-2xl mb-4">👥</div>
+        <h3 class="font-bold text-white mb-2">Staff Directory</h3>
+        <p class="text-sm text-gray-400 leading-relaxed">Unified staff profiles with ticket history, assigned assets, and department structure.</p>
+      </div>
+      <div class="card-glow bg-white/3 border border-white/8 rounded-2xl p-6 transition">
+        <div class="w-11 h-11 bg-red-500/15 rounded-xl flex items-center justify-center text-2xl mb-4">⏱</div>
+        <h3 class="font-bold text-white mb-2">SLA Enforcement</h3>
+        <p class="text-sm text-gray-400 leading-relaxed">Automatic SLA tracking with breach alerts, pause capability, and compliance reporting.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CHANNELS ────────────────────────────────────────────────────────────── -->
+<section id="channels" class="py-24 bg-white/[0.02] border-y border-white/5">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="grid lg:grid-cols-2 gap-16 items-center">
+      <div>
+        <p class="text-sky-400 text-sm font-semibold uppercase tracking-widest mb-3">Omnichannel</p>
+        <h2 class="text-4xl font-black mb-6">Meet users where<br>they already are.</h2>
+        <p class="text-gray-400 text-lg leading-relaxed mb-8">
+          Tickets arrive from any channel — email, WhatsApp, Teams, Slack, or walk-in. Every message becomes a tracked, SLA-managed ticket automatically.
+        </p>
+        <div class="space-y-4">
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 bg-sky-500/10 border border-sky-500/20 rounded-xl flex items-center justify-center text-xl flex-shrink-0">📧</div>
+            <div><h4 class="font-semibold text-white">Email (IMAP/SMTP)</h4><p class="text-sm text-gray-400 mt-0.5">Emails become tickets instantly. Replies sync back to the sender.</p></div>
+          </div>
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center justify-center text-xl flex-shrink-0">💬</div>
+            <div><h4 class="font-semibold text-white">WhatsApp Business API</h4><p class="text-sm text-gray-400 mt-0.5">Users message on WhatsApp — tickets are created and tracked behind the scenes.</p></div>
+          </div>
+          <div class="flex items-start gap-4">
+            <div class="w-10 h-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center text-xl flex-shrink-0">🟦</div>
+            <div><h4 class="font-semibold text-white">Microsoft Teams & Slack</h4><p class="text-sm text-gray-400 mt-0.5">Alert your team in real-time when critical tickets arrive or breach SLA.</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="relative">
+        <div class="bg-white/3 border border-white/8 rounded-2xl p-6 space-y-3">
+          <p class="text-xs text-gray-500 uppercase tracking-widest font-semibold">Incoming ticket channels</p>
+          
+          <div class="flex items-center gap-3 bg-white/3 border border-white/5 rounded-xl p-3">
+            <span class="text-xl">📧</span><div><p class="text-sm font-medium text-white">Email</p><p class="text-xs text-gray-400">imap.gmail.com · IMAP/SMTP</p></div><span class="ml-auto text-xs text-green-400 font-medium">● Active</span>
+          </div>
+          <div class="flex items-center gap-3 bg-white/3 border border-white/5 rounded-xl p-3">
+            <span class="text-xl">💬</span><div><p class="text-sm font-medium text-white">WhatsApp Business</p><p class="text-xs text-gray-400">Meta Cloud API · v18.0</p></div><span class="ml-auto text-xs text-green-400 font-medium">● Active</span>
+          </div>
+          <div class="flex items-center gap-3 bg-white/3 border border-white/5 rounded-xl p-3">
+            <span class="text-xl">🟦</span><div><p class="text-sm font-medium text-white">Microsoft Teams</p><p class="text-xs text-gray-400">Incoming Webhook</p></div><span class="ml-auto text-xs text-yellow-400 font-medium">○ Pending</span>
+          </div>
+          <div class="flex items-center gap-3 bg-white/3 border border-white/5 rounded-xl p-3">
+            <span class="text-xl">🟧</span><div><p class="text-sm font-medium text-white">Slack</p><p class="text-xs text-gray-400">Incoming Webhook</p></div><span class="ml-auto text-xs text-yellow-400 font-medium">○ Pending</span>
+          </div>
+        </div>
+        <div class="absolute -bottom-6 -right-6 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SECURITY ────────────────────────────────────────────────────────────── -->
+<section id="security" class="py-24">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center mb-16">
+      <p class="text-sky-400 text-sm font-semibold uppercase tracking-widest mb-3">Security First</p>
+      <h2 class="text-4xl font-black">Built with security<br>at every layer.</h2>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div class="bg-white/3 border border-white/8 rounded-2xl p-6">
+        <div class="text-3xl mb-4">🔐</div>
+        <h3 class="font-bold text-white mb-2">AES-256 Encryption</h3>
+        <p class="text-sm text-gray-400">All credentials and tokens are encrypted at rest. Plain values never touch the database.</p>
+      </div>
+      <div class="bg-white/3 border border-white/8 rounded-2xl p-6">
+        <div class="text-3xl mb-4">🛡</div>
+        <h3 class="font-bold text-white mb-2">Role-Based Access</h3>
+        <p class="text-sm text-gray-400">Five permission levels from Associate to Super Admin. System settings are locked to Super Admin only.</p>
+      </div>
+      <div class="bg-white/3 border border-white/8 rounded-2xl p-6">
+        <div class="text-3xl mb-4">🔒</div>
+        <h3 class="font-bold text-white mb-2">CSRF & Session Security</h3>
+        <p class="text-sm text-gray-400">Django's battle-tested security middleware protects every form and API endpoint.</p>
+      </div>
+      <div class="bg-white/3 border border-white/8 rounded-2xl p-6">
+        <div class="text-3xl mb-4">📋</div>
+        <h3 class="font-bold text-white mb-2">Full Audit Trail</h3>
+        <p class="text-sm text-gray-400">Every ticket edit, status change, and reassignment is logged with timestamp and actor.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ────────────────────────────────────────────────────────────────── -->
+<section class="py-24 bg-gradient-to-br from-sky-900/30 to-indigo-900/30 border-y border-white/5">
+  <div class="max-w-3xl mx-auto px-6 text-center">
+    <h2 class="text-4xl lg:text-5xl font-black mb-6">Ready to modernise<br>your IT support?</h2>
+    <p class="text-gray-400 text-lg mb-10">No complex setup. No enterprise contracts. Just a clean, fast ITSM platform your team will actually use.</p>
+    <a href="/login/" class="inline-block bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-white font-bold px-10 py-4 rounded-xl text-lg transition shadow-lg shadow-sky-500/25">
+      Open the Helpdesk →
+    </a>
+  </div>
+</section>
+
+<!-- ── FOOTER ─────────────────────────────────────────────────────────────── -->
+<footer class="py-10 border-t border-white/5">
+  <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+    <div class="flex items-center gap-2">
+      <div class="w-6 h-6 rounded-md bg-gradient-to-br from-sky-400 to-indigo-500 flex items-center justify-center text-white font-black text-[10px]">IT</div>
+      <span>IT Helpdesk — ITSM Platform</span>
+    </div>
+    <p>Built for modern IT teams. All rights reserved.</p>
+  </div>
+</footer>
+
+</body>
+</html>
