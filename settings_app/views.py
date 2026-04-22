@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.conf import settings as dj_settings
 from .models import IntegrationConfig, IntegrationAuditLog
+from tickets.models import TicketCategory, TicketSubcategory, Ticket
 
 
 def _role(user):
@@ -62,10 +63,56 @@ def settings_home(request):
         return redirect('dashboard')
     configs = _get_configs()
     recent_logs = IntegrationAuditLog.objects.select_related('actor')[:20]
-    return render(request, 'settings/home.html', {
+
+    categories = TicketCategory.objects.prefetch_related('subcategories').all()
+    category_rows = []
+    for category in categories:
+        item_count = Ticket.objects.filter(category=category.slug).count()
+        category_rows.append({
+            'name': category.name,
+            'icon': category.icon,
+            'required_level': category.required_level,
+            'sla_hours': category.sla_hours,
+            'subcategory_count': category.subcategories.count(),
+            'ticket_count': item_count,
+        })
+
+    notification_rows = [
+        {
+            'event': 'New ticket assignment',
+            'channel': 'Email',
+            'enabled': bool(configs['email_smtp'].is_configured() and configs['email_smtp'].is_active),
+            'detail': 'Uses SMTP to notify assignees when a ticket lands in their queue.',
+        },
+        {
+            'event': 'Requester status updates',
+            'channel': 'Email',
+            'enabled': bool(configs['email_smtp'].is_configured() and configs['email_smtp'].is_active),
+            'detail': 'Sends resolved / in-progress updates to the requester.',
+        },
+        {
+            'event': 'Team alerting',
+            'channel': 'Slack / Teams / Webhook',
+            'enabled': any(configs[key].is_configured() and configs[key].is_active for key in ('slack', 'teams', 'generic_webhook')),
+            'detail': 'Can post operational alerts into external channels.',
+        },
+    ]
+
+    context = {
         'configs': configs,
         'recent_logs': recent_logs,
-    })
+        'category_rows': category_rows,
+        'notification_rows': notification_rows,
+        'priority_slas': [
+            {'priority': 'Critical', 'response': '15 mins', 'resolution': '4 hours'},
+            {'priority': 'High', 'response': '1 hour', 'resolution': '8 hours'},
+            {'priority': 'Medium', 'response': '4 hours', 'resolution': '24 hours'},
+            {'priority': 'Low', 'response': '1 business day', 'resolution': '48 hours'},
+        ],
+        'active_tab': request.GET.get('tab', 'integrations'),
+        'ticket_count': Ticket.objects.count(),
+    }
+    return render(request, 'settings/home.html', context)
 
 
 @login_required
