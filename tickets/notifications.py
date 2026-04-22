@@ -2,25 +2,38 @@
 Email notifications for ticket events.
 Configure SMTP settings in settings.py / environment variables.
 """
-from django.core.mail import send_mail
+import logging
+
 from django.conf import settings
+from django.core.mail import send_mail
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_send(subject, body, recipients):
+    """
+    Best-effort email sender.
+
+    Never raise back into request flow. Email problems must not break
+    ticket creation, assignment, or status updates.
+    """
     recipients = [email for email in recipients if email]
     if not recipients:
         return False
+
     try:
-        send_mail(
+        result = send_mail(
             subject=subject,
             message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
             recipient_list=recipients,
             fail_silently=True,
         )
-        return True
-    except Exception as e:
-        print(f"[Notification Error] {e}")
+        return bool(result)
+    except BaseException as exc:
+        # Catch BaseException as well because some runtime/email backends can
+        # surface non-Exception failures during connection/setup.
+        logger.exception("Notification send failed: %s", exc)
         return False
 
 
