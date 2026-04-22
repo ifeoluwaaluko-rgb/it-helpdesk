@@ -58,7 +58,7 @@
         <tbody>
           {% for log in recent_logs %}
           <tr class="border-t border-[#e9ebed]">
-            <td class="px-4 py-3 text-[#68737d]">{{ log.created_at|date:"M d, Y H:i" }}</td>
+            <td class="px-4 py-3 text-[#68737d]" data-local-dt="{{ log.created_at|date:'c' }}" data-local-style="datetime">{{ log.created_at|date:"M d, Y H:i" }}</td>
             <td class="px-4 py-3">{{ log.integration }}</td>
             <td class="px-4 py-3 capitalize">{{ log.action }}</td>
             <td class="px-4 py-3">

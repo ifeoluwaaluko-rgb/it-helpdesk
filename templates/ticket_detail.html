@@ -43,7 +43,7 @@
         <div class="flex flex-wrap items-center gap-3 mt-2 text-xs text-[#68737d]">
           <span>From: <strong class="text-[#2f3941]">{{ ticket.requester_name|default:ticket.user_email }}</strong></span>
           <span>·</span>
-          <span>{{ ticket.created_at|date:"M d, Y H:i" }}</span>
+          <span data-local-dt="{{ ticket.created_at|date:'c' }}" data-local-style="datetime">{{ ticket.created_at|date:"M d, Y H:i" }}</span>
           <span>·</span>
           <span class="capitalize">{{ ticket.category_display }}</span>
         </div>
@@ -55,7 +55,7 @@
           <span class="font-semibold {% if ticket.is_sla_breached %}text-red-600{% else %}text-[#1f73b7]{% endif %}">
             {% if ticket.is_sla_breached %}⏰ SLA Deadline Passed{% else %}⏱ SLA: {{ ticket.sla_target_seconds|human_duration }} target{% endif %}
           </span>
-          <span class="font-mono font-semibold {% if ticket.is_sla_breached %}text-red-700{% else %}text-[#1f73b7]{% endif %}" id="sla-timer">{{ ticket.sla_deadline|date:"M d, H:i" }}</span>
+          <span class="font-mono font-semibold {% if ticket.is_sla_breached %}text-red-700{% else %}text-[#1f73b7]{% endif %}" id="sla-timer" data-local-dt="{{ ticket.sla_deadline|date:'c' }}" data-local-style="short">{{ ticket.sla_deadline|date:"M d, H:i" }}</span>
         </div>
         {% if not ticket.is_sla_breached %}
         <div class="text-xs text-blue-500 mt-1" id="sla-countdown">Calculating...</div>
@@ -117,7 +117,7 @@
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-1.5">
               <span class="text-xs font-semibold text-[#2f3941]">{{ comment.author.get_full_name|default:comment.author.username }}</span>
-              <span class="text-xs text-[#68737d]">{{ comment.created_at|date:"M d, H:i" }}</span>
+              <span class="text-xs text-[#68737d]" data-local-dt="{{ comment.created_at|date:'c' }}" data-local-style="short">{{ comment.created_at|date:"M d, H:i" }}</span>
               {% if comment.is_internal %}<span class="tag text-[10px]">Internal</span>{% endif %}
             </div>
             <div class="text-sm text-[#2f3941] leading-relaxed">{{ comment.body }}</div>
@@ -229,9 +229,9 @@
         <div class="flex justify-between"><dt class="text-[#68737d]">Channel</dt><dd>{{ ticket.get_channel_display }}</dd></div>
         <div class="flex justify-between"><dt class="text-[#68737d]">Required Level</dt><dd class="capitalize">{{ ticket.required_level }}</dd></div>
         <div class="flex justify-between"><dt class="text-[#68737d]">SLA Target</dt><dd>{{ ticket.sla_target_seconds|human_duration }}</dd></div>
-        {% if ticket.first_response_at %}<div class="flex justify-between"><dt class="text-[#68737d]">First Response</dt><dd class="font-semibold">{{ ticket.first_response_at|date:"M d, H:i" }}</dd></div><div class="flex justify-between"><dt class="text-[#68737d]">FRT</dt><dd class="text-cyan-700 font-semibold">{{ ticket.first_response_seconds|human_duration }}</dd></div>{% endif %}{% if ticket.resolution_time_seconds %}<div class="flex justify-between"><dt class="text-[#68737d]">Resolved In</dt><dd class="text-green-600 font-semibold">{{ ticket.resolution_time_seconds|human_duration }}</dd></div>{% endif %}
-        <div class="flex justify-between"><dt class="text-[#68737d]">Created</dt><dd>{{ ticket.created_at|date:"M d, Y" }}</dd></div>
-        <div class="flex justify-between"><dt class="text-[#68737d]">Updated</dt><dd>{{ ticket.updated_at|date:"M d, H:i" }}</dd></div>
+        {% if ticket.first_response_at %}<div class="flex justify-between"><dt class="text-[#68737d]">First Response</dt><dd class="font-semibold" data-local-dt="{{ ticket.first_response_at|date:'c' }}" data-local-style="short">{{ ticket.first_response_at|date:"M d, H:i" }}</dd></div><div class="flex justify-between"><dt class="text-[#68737d]">FRT</dt><dd class="text-cyan-700 font-semibold">{{ ticket.first_response_seconds|human_duration }}</dd></div>{% endif %}{% if ticket.resolution_time_seconds %}<div class="flex justify-between"><dt class="text-[#68737d]">Resolved In</dt><dd class="text-green-600 font-semibold">{{ ticket.resolution_time_seconds|human_duration }}</dd></div>{% endif %}
+        <div class="flex justify-between"><dt class="text-[#68737d]">Created</dt><dd data-local-dt="{{ ticket.created_at|date:'c' }}" data-local-style="date">{{ ticket.created_at|date:"M d, Y" }}</dd></div>
+        <div class="flex justify-between"><dt class="text-[#68737d]">Updated</dt><dd data-local-dt="{{ ticket.updated_at|date:'c' }}" data-local-style="short">{{ ticket.updated_at|date:"M d, H:i" }}</dd></div>
       </dl>
     </div>
   </div>

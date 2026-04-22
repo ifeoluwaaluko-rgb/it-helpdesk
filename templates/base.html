@@ -185,5 +185,41 @@ function closeSidebar() {
 {% block auth_content %}{% endblock %}
 {% endif %}
 
+
+<script>
+(function () {
+  function formatLocalDate(iso, options) {
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return null;
+      return new Intl.DateTimeFormat(undefined, options).format(d);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function upgradeDateNodes() {
+    document.querySelectorAll('[data-local-dt]').forEach(function (el) {
+      const iso = el.getAttribute('data-local-dt');
+      const style = el.getAttribute('data-local-style') || 'datetime';
+      let options = { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+      if (style === 'date') {
+        options = { month: 'short', day: '2-digit', year: 'numeric' };
+      } else if (style === 'short') {
+        options = { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+      }
+      const rendered = formatLocalDate(iso, options);
+      if (rendered) el.textContent = rendered;
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', upgradeDateNodes);
+  } else {
+    upgradeDateNodes();
+  }
+})();
+</script>
+
 </body>
 </html>
