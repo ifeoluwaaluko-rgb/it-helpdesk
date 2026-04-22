@@ -205,21 +205,23 @@
         <th class="px-5 py-2.5">Priority</th><th class="px-5 py-2.5">Status</th><th class="px-5 py-2.5">Assignee</th>
       </tr></thead>
       <tbody class="divide-y divide-[#e9ebed]">
-      {% for t in recent_tickets %}
-      <tr class="hover:bg-[#f9fafb] {% if t.id in sla_breached_ids %}bg-red-50{% endif %}">
-        <td class="px-5 py-3 text-[#68737d] text-xs">#{{ t.id }}</td>
-        <td class="px-5 py-3">
-          <a href="{% url 'ticket_detail' t.pk %}" class="font-medium text-[#1f73b7] hover:underline">{{ t.title|truncatechars:42 }}</a>
-          {% if t.id in sla_breached_ids %}<span class="ml-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-semibold">SLA</span>{% endif %}
-        </td>
-        <td class="px-5 py-3 text-xs text-[#68737d]">{{ t.requester_name|default:t.user_email|truncatechars:20 }}</td>
-        <td class="px-5 py-3">{% include 'partials/priority_badge.html' with priority=t.priority %}</td>
-        <td class="px-5 py-3">{% include 'partials/status_badge.html' with status=t.status %}</td>
-        <td class="px-5 py-3 text-xs text-[#68737d]">{{ t.assigned_to.get_full_name|default:t.assigned_to.username|default:"—" }}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="6" class="px-5 py-8 text-center text-[#68737d] text-sm">No tickets. 🎉</td></tr>
-      {% endfor %}
+      {% if recent_tickets %}
+        {% for t in recent_tickets %}
+        <tr class="hover:bg-[#f9fafb] {% if t.id in sla_breached_ids %}bg-red-50{% endif %}">
+          <td class="px-5 py-3 text-[#68737d] text-xs">#{{ t.id }}</td>
+          <td class="px-5 py-3">
+            <a href="{% url 'ticket_detail' t.pk %}" class="font-medium text-[#1f73b7] hover:underline">{{ t.title|truncatechars:42 }}</a>
+            {% if t.id in sla_breached_ids %}<span class="ml-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-semibold">SLA</span>{% endif %}
+          </td>
+          <td class="px-5 py-3 text-xs text-[#68737d]">{{ t.requester_name|default:t.user_email|truncatechars:20 }}</td>
+          <td class="px-5 py-3">{% include 'partials/priority_badge.html' with priority=t.priority %}</td>
+          <td class="px-5 py-3">{% include 'partials/status_badge.html' with status=t.status %}</td>
+          <td class="px-5 py-3 text-xs text-[#68737d]">{{ t.assigned_to.get_full_name|default:t.assigned_to.username|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="6" class="px-5 py-8 text-center text-[#68737d] text-sm">No tickets. 🎉</td></tr>
+      {% endif %}
       </tbody>
     </table>
   </div>
@@ -231,11 +233,35 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  if (!document.querySelector('[data-dashboard-page]')) return;
-  setInterval(function () {
-    if (document.hidden) return;
-    window.location.reload();
-  }, 15000);
+  const ctx = document.getElementById('volumeChart');
+  if (ctx && typeof Chart !== 'undefined') {
+    try {
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: {{ chart_labels|safe }},
+          datasets: [{
+            label: 'Tickets',
+            data: {{ chart_data|safe }},
+            backgroundColor: 'rgba(31,115,183,0.85)',
+            borderRadius: 4,
+            borderSkipped: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('Chart render failed', e);
+    }
+  }
 });
 </script>
 {% endblock %}
