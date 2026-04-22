@@ -152,8 +152,8 @@ def dashboard(request):
     sla_compliance = round((sla_ok / closed.count()) * 100) if closed.exists() else 100
 
     resolved_tickets = all_tickets.filter(resolved_at__isnull=False)
-    times = [t.resolution_time_hours for t in resolved_tickets if t.resolution_time_hours]
-    avg_resolution = round(sum(times)/len(times), 1) if times else 0
+    resolution_seconds = [t.resolution_time_seconds for t in resolved_tickets if t.resolution_time_seconds is not None]
+    avg_resolution = round(sum(resolution_seconds) / len(resolution_seconds)) if resolution_seconds else 0
 
     today = date.today()
     chart_labels, chart_data = [], []
@@ -168,8 +168,9 @@ def dashboard(request):
     for cat, _ in Ticket.CATEGORY_CHOICES:
         cat_tickets = resolved_tickets.filter(category=cat)
         if cat_tickets.exists():
-            t2 = [t.resolution_time_hours for t in cat_tickets if t.resolution_time_hours]
-            if t2: cat_resolution[cat] = round(sum(t2)/len(t2), 1)
+            t2 = [t.resolution_time_seconds for t in cat_tickets if t.resolution_time_seconds is not None]
+            if t2:
+                cat_resolution[cat] = round(sum(t2) / len(t2))
 
     staff_workload = []
     if is_manager:
@@ -183,8 +184,8 @@ def dashboard(request):
     my_productivity = round((my_resolved / my_total_assigned) * 100) if my_total_assigned > 0 else 0
 
     recent = all_tickets[:15] if is_manager else my_tickets[:15]
-    first_response_values = [t.first_response_minutes for t in all_tickets if t.first_response_minutes is not None]
-    avg_first_response = round(sum(first_response_values) / len(first_response_values), 1) if first_response_values else 0
+    first_response_values = [t.first_response_seconds for t in all_tickets if t.first_response_seconds is not None]
+    avg_first_response = round(sum(first_response_values) / len(first_response_values)) if first_response_values else 0
     recurring_issues = _get_recurring_issue_summary() if is_manager else []
 
     kpis = [
@@ -503,8 +504,8 @@ def live_dashboard(request):
     closed = all_tickets.filter(status__in=['resolved','closed'])
     sla_ok = sum(1 for t in closed if t.resolved_at and t.resolved_at <= t.sla_deadline)
     sla_compliance = round((sla_ok/closed.count())*100) if closed.exists() else 100
-    times = [t.resolution_time_hours for t in all_tickets.filter(resolved_at__isnull=False) if t.resolution_time_hours]
-    avg_resolution = round(sum(times)/len(times),1) if times else 0
+    times = [t.resolution_time_seconds for t in all_tickets.filter(resolved_at__isnull=False) if t.resolution_time_seconds is not None]
+    avg_resolution = round(sum(times)/len(times)) if times else 0
     total_assigned = all_tickets.exclude(assigned_to__isnull=True).count()
     productivity = round((resolved_t/total_assigned)*100) if total_assigned > 0 else 0
     sla_breached = sum(1 for t in all_tickets.filter(status__in=['open','in_progress']) if t.is_sla_breached)

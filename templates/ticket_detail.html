@@ -1,3 +1,4 @@
+{% load ticket_time %}
 {% extends 'base.html' %}
 {% block title %}#{{ ticket.id }} {{ ticket.title }}{% endblock %}
 {% block breadcrumb %}<a href="{% url 'ticket_list' %}" class="hover:text-[#1f73b7]">Tickets</a> <span class="mx-1">/</span> #{{ ticket.id }}{% endblock %}
@@ -52,7 +53,7 @@
       <div class="px-5 py-3 border-b border-[#e9ebed] {% if ticket.is_sla_breached %}bg-red-50{% else %}bg-blue-50{% endif %}">
         <div class="flex items-center justify-between text-xs">
           <span class="font-semibold {% if ticket.is_sla_breached %}text-red-600{% else %}text-[#1f73b7]{% endif %}">
-            {% if ticket.is_sla_breached %}⏰ SLA Deadline Passed{% else %}⏱ SLA: {{ ticket.sla_hours }}h target{% endif %}
+            {% if ticket.is_sla_breached %}⏰ SLA Deadline Passed{% else %}⏱ SLA: {{ ticket.sla_target_seconds|human_duration }} target{% endif %}
           </span>
           <span class="font-mono font-semibold {% if ticket.is_sla_breached %}text-red-700{% else %}text-[#1f73b7]{% endif %}" id="sla-timer">{{ ticket.sla_deadline|date:"M d, H:i" }}</span>
         </div>
@@ -227,8 +228,8 @@
         <div class="flex justify-between"><dt class="text-[#68737d]">Ticket ID</dt><dd class="font-mono font-semibold">#{{ ticket.id }}</dd></div>
         <div class="flex justify-between"><dt class="text-[#68737d]">Channel</dt><dd>{{ ticket.get_channel_display }}</dd></div>
         <div class="flex justify-between"><dt class="text-[#68737d]">Required Level</dt><dd class="capitalize">{{ ticket.required_level }}</dd></div>
-        <div class="flex justify-between"><dt class="text-[#68737d]">SLA Target</dt><dd>{{ ticket.sla_hours }}h</dd></div>
-        {% if ticket.first_response_at %}<div class="flex justify-between"><dt class="text-[#68737d]">First Response</dt><dd class="font-semibold">{{ ticket.first_response_at|date:"M d, H:i" }}</dd></div><div class="flex justify-between"><dt class="text-[#68737d]">FRT</dt><dd class="text-cyan-700 font-semibold">{{ ticket.first_response_minutes }}m</dd></div>{% endif %}{% if ticket.resolution_time_hours %}<div class="flex justify-between"><dt class="text-[#68737d]">Resolved In</dt><dd class="text-green-600 font-semibold">{{ ticket.resolution_time_hours }}h</dd></div>{% endif %}
+        <div class="flex justify-between"><dt class="text-[#68737d]">SLA Target</dt><dd>{{ ticket.sla_target_seconds|human_duration }}</dd></div>
+        {% if ticket.first_response_at %}<div class="flex justify-between"><dt class="text-[#68737d]">First Response</dt><dd class="font-semibold">{{ ticket.first_response_at|date:"M d, H:i" }}</dd></div><div class="flex justify-between"><dt class="text-[#68737d]">FRT</dt><dd class="text-cyan-700 font-semibold">{{ ticket.first_response_seconds|human_duration }}</dd></div>{% endif %}{% if ticket.resolution_time_seconds %}<div class="flex justify-between"><dt class="text-[#68737d]">Resolved In</dt><dd class="text-green-600 font-semibold">{{ ticket.resolution_time_seconds|human_duration }}</dd></div>{% endif %}
         <div class="flex justify-between"><dt class="text-[#68737d]">Created</dt><dd>{{ ticket.created_at|date:"M d, Y" }}</dd></div>
         <div class="flex justify-between"><dt class="text-[#68737d]">Updated</dt><dd>{{ ticket.updated_at|date:"M d, H:i" }}</dd></div>
       </dl>
@@ -267,11 +268,19 @@ const remaining = {{ ticket.sla_remaining_seconds }};
 const el = document.getElementById('sla-countdown');
 if (el && remaining > 0) {
   const start = Date.now();
+  function formatRemaining(sec) {
+    if (sec < 60) return `${sec}s remaining`;
+    const minutes = Math.floor(sec / 60);
+    if (minutes < 60) return `${minutes}m remaining`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h remaining`;
+    const days = Math.floor(hours / 24);
+    return `${days}d remaining`;
+  }
   function tick() {
     const left = remaining - Math.floor((Date.now()-start)/1000);
     if (left <= 0) { el.textContent = 'Deadline has passed'; el.className = 'text-xs text-red-500 font-semibold mt-1'; return; }
-    const h = Math.floor(left/3600), m = Math.floor((left%3600)/60), s = left%60;
-    el.textContent = `${h}h ${m}m ${s}s remaining`;
+    el.textContent = formatRemaining(left);
     if (left < 3600) el.className = 'text-xs text-orange-500 font-semibold mt-1';
     setTimeout(tick, 1000);
   }

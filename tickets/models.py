@@ -99,16 +99,32 @@ class Ticket(models.Model):
         return int((self.sla_deadline - timezone.now()).total_seconds())
 
     @property
-    def resolution_time_hours(self):
+    def resolution_time_seconds(self):
         if self.resolved_at:
-            return round((self.resolved_at - self.created_at).total_seconds() / 3600, 1)
+            return max(int((self.resolved_at - self.created_at).total_seconds()), 0)
+        return None
+
+    @property
+    def resolution_time_hours(self):
+        if self.resolution_time_seconds is not None:
+            return round(self.resolution_time_seconds / 3600, 1)
+        return None
+
+    @property
+    def first_response_seconds(self):
+        if self.first_response_at:
+            return max(int((self.first_response_at - self.created_at).total_seconds()), 0)
         return None
 
     @property
     def first_response_minutes(self):
-        if self.first_response_at:
-            return round((self.first_response_at - self.created_at).total_seconds() / 60, 1)
+        if self.first_response_seconds is not None:
+            return round(self.first_response_seconds / 60, 1)
         return None
+
+    @property
+    def sla_target_seconds(self):
+        return max(int(self.sla_hours * 3600), 0)
 
     @property
     def sla_progress_ratio(self):
