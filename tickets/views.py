@@ -10,9 +10,10 @@ from django.http import JsonResponse, Http404
 from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment
 from .classifier import classify, CATEGORY_TREE
 from .assignment import auto_assign
-from .notifications import notify_assignment, notify_status_change
+from .notifications import notify_assignment, notify_status_change, notify_ticket_received
 from knowledge.models import Article
 import json
+import re
 from datetime import date, timedelta
 import logging
 
@@ -20,6 +21,79 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_ATTACHMENT_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.pdf', '.docx', '.xlsx', '.txt', '.zip'}
 MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+STOP_WORDS = {
+    'the', 'and', 'for', 'with', 'from', 'that', 'this', 'have', 'been', 'cannot',
+    'cant', 'into', 'your', 'you', 'are', 'was', 'were', 'not', 'but', 'when', 'what',
+    'where', 'while', 'will', 'about', 'need', 'help', 'issue', 'problem', 'error',
+    'ticket', 'please', 'after', 'before', 'does', 'doing', 'done', 'cannot', 'email'
+}
+
+
+def _mark_first_response(ticket):
+    if not ticket.first_response_at:
+        ticket.first_response_at = timezone.now()
+        ticket.save(update_fields=['first_response_at', 'updated_at'])
+
+
+def _normalize_issue_signature(ticket):
+    title = re.sub(r'[^a-z0-9\s]', ' ', (ticket.title or '').lower())
+    tokens = []
+    for token in title.split():
+        if len(token) < 3 or token.isdigit() or token in STOP_WORDS:
+            continue
+        if token not in tokens:
+            tokens.append(token)
+    keyword_string = ' '.join(tokens[:4]) or ticket.get_category_display().lower()
+    return f"{ticket.get_category_display()}::{keyword_string}"
+
+
+def _get_recurring_issue_summary(limit=5):
+    recent_tickets = Ticket.objects.filter(created_at__date__gte=date.today() - timedelta(days=6))
+    grouped = {}
+    for ticket in recent_tickets:
+        key = _normalize_issue_signature(ticket)
+        item = grouped.setdefault(key, {
+            'label': key.split('::', 1)[1].title(),
+            'category': ticket.get_category_display(),
+            'count': 0,
+            'latest_ticket_id': ticket.id,
+        })
+        item['count'] += 1
+        item['latest_ticket_id'] = max(item['latest_ticket_id'], ticket.id)
+    recurring = [value for value in grouped.values() if value['count'] > 1]
+    recurring.sort(key=lambda row: (-row['count'], row['category'], row['label']))
+    return recurring[:limit]
+
+
+def _knowledge_suggestions(ticket, limit=3):
+    ticket_text = f"{ticket.title} {ticket.description} {ticket.category} {ticket.subcategory} {ticket.item}".lower()
+    ticket_tokens = {
+        token for token in re.findall(r'[a-z0-9]{3,}', ticket_text)
+        if token not in STOP_WORDS
+    }
+    suggestions = []
+    for article in Article.objects.all():
+        article_text = f"{article.title} {article.tags} {article.content}".lower()
+        article_tokens = {
+            token for token in re.findall(r'[a-z0-9]{3,}', article_text)
+            if token not in STOP_WORDS
+        }
+        overlap = ticket_tokens & article_tokens
+        score = len(overlap)
+        if article.category == ticket.category:
+            score += 2
+        if article.tags and ticket.item and ticket.item.lower() in article.tags.lower():
+            score += 2
+        if score <= 0:
+            continue
+        article.score = score
+        plain_preview = re.sub(r'<[^>]+>', ' ', article.content)
+        article.preview_text = re.sub(r'\s+', ' ', plain_preview).strip()
+        suggestions.append(article)
+    suggestions.sort(key=lambda article: (-article.score, -article.updated_at.timestamp()))
+    return suggestions[:limit]
 
 
 
@@ -109,6 +183,9 @@ def dashboard(request):
     my_productivity = round((my_resolved / my_total_assigned) * 100) if my_total_assigned > 0 else 0
 
     recent = all_tickets[:15] if is_manager else my_tickets[:15]
+    first_response_values = [t.first_response_minutes for t in all_tickets if t.first_response_minutes is not None]
+    avg_first_response = round(sum(first_response_values) / len(first_response_values), 1) if first_response_values else 0
+    recurring_issues = _get_recurring_issue_summary() if is_manager else []
 
     kpis = [
         (open_count,            'Open',        'text-[#1f73b7]', ''),
@@ -129,6 +206,7 @@ def dashboard(request):
             'resolved': resolved_count, 'sla_breached': len(sla_breached_ids),
             'unassigned': unassigned.count(), 'sla_compliance': sla_compliance,
             'avg_resolution': avg_resolution,
+            'avg_first_response': avg_first_response,
         },
         'kpis': kpis,
         'sla_breached_ids': sla_breached_ids,
@@ -141,6 +219,7 @@ def dashboard(request):
         'my_productivity': my_productivity,
         'my_resolved': my_resolved,
         'my_total_assigned': my_total_assigned,
+        'recurring_issues': recurring_issues,
     }
     return render(request, 'dashboard.html', context)
 
@@ -178,7 +257,7 @@ def ticket_list(request):
 def ticket_detail(request, pk):
     ticket = get_object_or_404(Ticket, pk=pk)
     comments = ticket.comments.select_related('author').all()
-    related_articles = Article.objects.filter(category=ticket.category)[:3]
+    related_articles = _knowledge_suggestions(ticket)
     role = get_role(request.user)
 
     if request.method == 'POST':
@@ -188,11 +267,13 @@ def ticket_detail(request, pk):
             body = request.POST.get('body','').strip()
             if body:
                 TicketComment.objects.create(ticket=ticket, author=request.user, body=body)
+                _mark_first_response(ticket)
 
         elif action == 'pickup' and not ticket.assigned_to:
             ticket.assigned_to = request.user
             ticket.status = 'in_progress'
             ticket.save()
+            _mark_first_response(ticket)
             notify_assignment(ticket, request.user)
             messages.success(request, f'You picked up ticket #{ticket.id}.')
 
@@ -205,6 +286,8 @@ def ticket_detail(request, pk):
                 if new_status == 'resolved' and not ticket.resolved_at:
                     ticket.resolved_at = timezone.now()
                 ticket.save()
+                if new_status in ['in_progress', 'pending', 'resolved', 'closed']:
+                    _mark_first_response(ticket)
                 if new_status != old_status:
                     notify_status_change(ticket, request.user)
 
@@ -218,6 +301,7 @@ def ticket_detail(request, pk):
                     ticket.refresh_from_db()
                     if ticket.assigned_to and (not old or old.id != ticket.assigned_to.id):
                         notify_assignment(ticket, ticket.assigned_to)
+                        _mark_first_response(ticket)
                 except (ValueError, User.DoesNotExist):
                     messages.error(request, 'Invalid staff selection.')
 
@@ -378,6 +462,8 @@ def create_ticket(request):
                             content_type=getattr(attachment, 'content_type', '') or '',
                             source='manual',
                         )
+
+                notify_ticket_received(ticket)
 
                 try:
                     assignee = auto_assign(ticket)

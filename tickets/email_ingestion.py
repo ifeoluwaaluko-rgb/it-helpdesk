@@ -13,6 +13,7 @@ from django.core.files.base import ContentFile
 from .models import Ticket, TicketAttachment
 from .classifier import classify
 from .assignment import auto_assign
+from .notifications import notify_ticket_received
 
 
 def decode_str(value):
@@ -111,12 +112,16 @@ def fetch_and_create_tickets():
                     description=body or '(No body)',
                     user_email=user_email,
                     category=result.get('category', 'other'),
+                    subcategory=result.get('subcategory', ''),
+                    item=result.get('item', ''),
                     priority=result.get('priority', 'medium'),
                     required_level=result.get('level', 'associate'),
                     sla_hours=result.get('sla_hours', 24),
                     channel='email',
                     raw_email=raw.decode('utf-8', errors='replace'),
                 )
+
+                notify_ticket_received(ticket)
 
                 # Save attachments
                 for att in get_attachments(msg):

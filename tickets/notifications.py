@@ -4,22 +4,56 @@ Configure SMTP settings in settings.py / environment variables.
 """
 from django.core.mail import send_mail
 from django.conf import settings
-from django.template.loader import render_to_string
+
+
+def _safe_send(subject, body, recipients):
+    recipients = [email for email in recipients if email]
+    if not recipients:
+        return False
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=recipients,
+            fail_silently=True,
+        )
+        return True
+    except Exception as e:
+        print(f"[Notification Error] {e}")
+        return False
+
+
+def notify_ticket_received(ticket):
+    """Send an acknowledgment to the requester as soon as a ticket is created."""
+    subject = f"[Helpdesk] Ticket #{ticket.id} received: {ticket.title}"
+    body = f"""Hi,
+
+Your IT request has been received and logged successfully.
+
+Ticket: #{ticket.id} — {ticket.title}
+Priority: {ticket.get_priority_display()}
+Category: {ticket.category_display}
+Expected SLA: {ticket.sla_hours} hours
+
+Our IT team will review it shortly. Please keep this ticket number for future follow-up.
+
+— IT Helpdesk
+"""
+    return _safe_send(subject, body, [ticket.user_email])
 
 
 def notify_assignment(ticket, assignee):
     """Send email to staff member when a ticket is assigned to them."""
-    if not assignee.email:
-        return
-    try:
-        subject = f"[Helpdesk] Ticket #{ticket.id} assigned to you: {ticket.title}"
-        body = f"""Hi {assignee.get_full_name() or assignee.username},
+    name = assignee.get_full_name() or assignee.username or "there"
+    subject = f"[Helpdesk] Ticket #{ticket.id} assigned to you: {ticket.title}"
+    body = f"""Hi {name},
 
 A new ticket has been assigned to you.
 
 Ticket: #{ticket.id} — {ticket.title}
 Priority: {ticket.get_priority_display()}
-Category: {ticket.get_category_display()}
+Category: {ticket.category_display}
 SLA Target: {ticket.sla_hours} hours
 From: {ticket.user_email}
 
@@ -30,24 +64,17 @@ Please log in to the helpdesk to action this ticket.
 
 — IT Helpdesk System
 """
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[assignee.email],
-            fail_silently=True,
-        )
-    except Exception as e:
-        print(f"[Notification Error] {e}")
+    return _safe_send(subject, body, [assignee.email])
 
 
 def notify_status_change(ticket, changed_by):
     """Notify the requester when their ticket status changes."""
-    if not ticket.user_email:
-        return
-    try:
-        subject = f"[Helpdesk] Your ticket #{ticket.id} is now {ticket.get_status_display()}"
-        body = f"""Hi,
+    status_note = (
+        "Your issue has been resolved. If you still experience the problem, please reply to this email or contact IT."
+        if ticket.status == 'resolved'
+        else "Our team is working on your request."
+    )
+    body = f"""Hi,
 
 Your IT support ticket has been updated.
 
@@ -55,16 +82,9 @@ Ticket: #{ticket.id} — {ticket.title}
 Status: {ticket.get_status_display()}
 Updated by: {changed_by.get_full_name() or changed_by.username}
 
-{'Your issue has been resolved. If you experience further problems, please submit a new ticket.' if ticket.status == 'resolved' else 'Our team is working on your request.'}
+{status_note}
 
 — IT Helpdesk
 """
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[ticket.user_email],
-            fail_silently=True,
-        )
-    except Exception as e:
-        print(f"[Notification Error] {e}")
+    subject = f"[Helpdesk] Your ticket #{ticket.id} is now {ticket.get_status_display()}"
+    return _safe_send(subject, body, [ticket.user_email])

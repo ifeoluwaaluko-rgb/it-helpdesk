@@ -8,7 +8,7 @@
   <div class="flex items-center gap-2 flex-wrap">
     {% include 'partials/status_badge.html' with status=ticket.status %}
     {% include 'partials/priority_badge.html' with priority=ticket.priority %}
-    {% if ticket.is_sla_breached %}<span class="status-badge bg-red-100 text-red-700 animate-pulse">⚠ SLA Breached</span>{% endif %}
+    {% if ticket.sla_state == 'red' %}<span class="status-badge bg-red-100 text-red-700 animate-pulse">⚠ SLA Breached</span>{% elif ticket.sla_state == 'yellow' %}<span class="status-badge bg-yellow-100 text-yellow-700">⏳ SLA At Risk</span>{% elif ticket.sla_state == 'green' %}<span class="status-badge bg-green-100 text-green-700">✓ SLA On Track</span>{% endif %}
     {% if ticket.channel != 'manual' %}
     <span class="tag">{% if ticket.channel == 'email' %}📧{% elif ticket.channel == 'walk_in' %}🚶{% elif ticket.channel == 'phone' %}📞{% else %}💬{% endif %} {{ ticket.get_channel_display }}</span>
     {% endif %}
@@ -147,7 +147,7 @@
         {% for a in related_articles %}
         <div class="flex items-start gap-2">
           <svg class="w-4 h-4 text-[#1f8c8c] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-          <div><a href="{% url 'article_detail' a.pk %}" class="text-sm text-[#1f73b7] hover:underline font-medium">{{ a.title }}</a><p class="text-xs text-[#68737d]">{{ a.content|truncatechars:70 }}</p></div>
+          <div><a href="{% url 'article_detail' a.pk %}" class="text-sm text-[#1f73b7] hover:underline font-medium">{{ a.title }}</a><p class="text-xs text-[#68737d]">{{ a.preview_text|default:a.content|truncatechars:90 }}</p></div>
         </div>
         {% endfor %}
       </div>
@@ -228,7 +228,7 @@
         <div class="flex justify-between"><dt class="text-[#68737d]">Channel</dt><dd>{{ ticket.get_channel_display }}</dd></div>
         <div class="flex justify-between"><dt class="text-[#68737d]">Required Level</dt><dd class="capitalize">{{ ticket.required_level }}</dd></div>
         <div class="flex justify-between"><dt class="text-[#68737d]">SLA Target</dt><dd>{{ ticket.sla_hours }}h</dd></div>
-        {% if ticket.resolution_time_hours %}<div class="flex justify-between"><dt class="text-[#68737d]">Resolved In</dt><dd class="text-green-600 font-semibold">{{ ticket.resolution_time_hours }}h</dd></div>{% endif %}
+        {% if ticket.first_response_at %}<div class="flex justify-between"><dt class="text-[#68737d]">First Response</dt><dd class="font-semibold">{{ ticket.first_response_at|date:"M d, H:i" }}</dd></div><div class="flex justify-between"><dt class="text-[#68737d]">FRT</dt><dd class="text-cyan-700 font-semibold">{{ ticket.first_response_minutes }}m</dd></div>{% endif %}{% if ticket.resolution_time_hours %}<div class="flex justify-between"><dt class="text-[#68737d]">Resolved In</dt><dd class="text-green-600 font-semibold">{{ ticket.resolution_time_hours }}h</dd></div>{% endif %}
         <div class="flex justify-between"><dt class="text-[#68737d]">Created</dt><dd>{{ ticket.created_at|date:"M d, Y" }}</dd></div>
         <div class="flex justify-between"><dt class="text-[#68737d]">Updated</dt><dd>{{ ticket.updated_at|date:"M d, H:i" }}</dd></div>
       </dl>

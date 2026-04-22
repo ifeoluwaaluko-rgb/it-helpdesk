@@ -69,6 +69,7 @@ class Ticket(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    first_response_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     sla_paused_at = models.DateTimeField(null=True, blank=True)
     sla_pause_seconds = models.IntegerField(default=0)
@@ -102,6 +103,27 @@ class Ticket(models.Model):
         if self.resolved_at:
             return round((self.resolved_at - self.created_at).total_seconds() / 3600, 1)
         return None
+
+    @property
+    def first_response_minutes(self):
+        if self.first_response_at:
+            return round((self.first_response_at - self.created_at).total_seconds() / 60, 1)
+        return None
+
+    @property
+    def sla_progress_ratio(self):
+        total_seconds = max(self.sla_hours * 3600, 1)
+        elapsed = (timezone.now() - self.created_at).total_seconds() - self.sla_pause_seconds
+        return max(0, min(elapsed / total_seconds, 1))
+
+    @property
+    def sla_state(self):
+        if self.status in ['resolved', 'closed']:
+            return 'resolved'
+        if self.is_sla_breached:
+            return 'red'
+        remaining_ratio = max(self.sla_remaining_seconds, 0) / max(self.sla_hours * 3600, 1)
+        return 'green' if remaining_ratio > 0.5 else 'yellow'
 
     @property
     def tag_list(self):

@@ -36,6 +36,13 @@
     </div>
     <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_resolution }}h</p><p class="text-xs text-[#68737d]">Avg Resolution</p></div>
   </div>
+
+  <div class="zd-card p-4 flex items-center gap-3">
+    <div class="w-9 h-9 rounded bg-cyan-100 flex items-center justify-center text-cyan-700 flex-shrink-0">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div>
+    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_first_response }}m</p><p class="text-xs text-[#68737d]">Avg First Response</p></div>
+  </div>
   <div class="zd-card p-4 flex items-center gap-3">
     <div class="w-9 h-9 rounded {% if stats.unassigned > 0 %}bg-orange-100{% else %}bg-gray-100{% endif %} flex items-center justify-center {% if stats.unassigned > 0 %}text-orange-500{% else %}text-gray-500{% endif %} flex-shrink-0">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
@@ -69,6 +76,27 @@
     </div>
   </div>
 </div>
+
+
+{% if recurring_issues %}
+<div class="zd-card p-5 mb-4">
+  <div class="flex items-center justify-between mb-3">
+    <h3 class="text-sm font-semibold text-[#2f3941]">Recurring Issues (Last 7 Days)</h3>
+    <span class="text-xs text-[#68737d]">Top repeated patterns</span>
+  </div>
+  <div class="space-y-2">
+    {% for issue in recurring_issues %}
+    <div class="flex items-center justify-between bg-[#f9fafb] border border-[#e9ebed] rounded-lg px-3 py-2">
+      <div>
+        <p class="text-sm font-medium text-[#2f3941]">{{ issue.label }}</p>
+        <p class="text-xs text-[#68737d]">{{ issue.category }}</p>
+      </div>
+      <span class="tag">{{ issue.count }} tickets</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
   <!-- Staff Workload -->
