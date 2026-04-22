@@ -1,5 +1,5 @@
-{% load ticket_time %}
 {% extends 'base.html' %}
+{% load ticket_time %}
 {% block title %}#{{ ticket.id }} {{ ticket.title }}{% endblock %}
 {% block breadcrumb %}<a href="{% url 'ticket_list' %}" class="hover:text-[#1f73b7]">Tickets</a> <span class="mx-1">/</span> #{{ ticket.id }}{% endblock %}
 {% block content %}
