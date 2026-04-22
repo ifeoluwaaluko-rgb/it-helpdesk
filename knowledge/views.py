@@ -1,3 +1,4 @@
+import html
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -5,6 +6,24 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from .models import Article, ArticleRevision, ArticleFeedback, ArticleAttachment
 from tickets.models import Ticket
+
+def _normalize_rich_text(content):
+    content = (content or '').strip()
+    if not content:
+        return ''
+    # Decode unicode-escaped HTML fragments like \u003Cdiv\u003E
+    if '\\u003C' in content or '\\u003E' in content or '\\u0026' in content:
+        try:
+            content = content.encode('utf-8').decode('unicode_escape')
+        except Exception:
+            pass
+    # Decode HTML entities that may have been stored escaped
+    try:
+        content = html.unescape(content)
+    except Exception:
+        pass
+    return content
+
 
 
 def _get_role(user):
@@ -50,6 +69,7 @@ def article_detail(request, pk):
     can_delete = _can_delete_article(request.user, article)
     return render(request, 'knowledge/article_detail.html', {
         'article': article,
+        'decoded_content': _normalize_rich_text(article.content),
         'user_feedback': user_feedback,
         'can_delete': can_delete,
     })
@@ -86,6 +106,7 @@ def revision_detail(request, pk, rev_pk):
     return render(request, 'knowledge/revision_detail.html', {
         'article': article,
         'revision': revision,
+        'decoded_revision_content': _normalize_rich_text(revision.content),
     })
 
 
@@ -97,7 +118,7 @@ def create_article(request, ticket_id=None):
 
     if request.method == 'POST':
         title = request.POST.get('title', '').strip()
-        content = request.POST.get('content', '').strip()
+        content = _normalize_rich_text(request.POST.get('content', ''))
         category = request.POST.get('category', 'other')
         tags = request.POST.get('tags', '').strip()
         source_id = request.POST.get('source_ticket')
@@ -143,7 +164,7 @@ def edit_article(request, pk):
 
     if request.method == 'POST':
         title = request.POST.get('title', '').strip()
-        content = request.POST.get('content', '').strip()
+        content = _normalize_rich_text(request.POST.get('content', ''))
         category = request.POST.get('category', article.category)
         tags = request.POST.get('tags', '').strip()
         revision_note = request.POST.get('revision_note', '').strip()
@@ -179,6 +200,7 @@ def edit_article(request, pk):
 
     return render(request, 'knowledge/edit_article.html', {
         'article': article,
+        'decoded_content': _normalize_rich_text(article.content),
         'category_choices': Article.CATEGORY_CHOICES,
         'attachments': article.attachments.all(),
     })

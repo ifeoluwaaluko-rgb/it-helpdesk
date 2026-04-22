@@ -52,7 +52,7 @@
         <div id="editor-area"
           contenteditable="true"
           class="border border-gray-200 rounded-b-lg px-4 py-3 text-sm text-gray-800 min-h-[240px] focus:outline-none focus:ring-2 focus:ring-blue-400 prose prose-sm max-w-none"
-          style="line-height:1.7" data-content="{{ article.content|escapejs }}"></div>
+          style="line-height:1.7" data-content="{{ decoded_content|escapejs }}"></div>
         <p class="text-xs text-gray-400 mt-1">Inline images will be embedded as base64 in the content. Use Attachments below for files.</p>
       </div>
 

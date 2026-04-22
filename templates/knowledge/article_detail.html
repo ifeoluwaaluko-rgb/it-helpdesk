@@ -29,7 +29,7 @@
     </div>
 
     <!-- Content rendered as HTML (supports rich editor output) -->
-    <div class="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none">{{ article.content|safe }}</div>
+    <div class="text-gray-700 text-sm leading-relaxed prose prose-sm max-w-none">{{ decoded_content|safe }}</div>
 
     {% if article.tag_list %}
     <div class="mt-6 pt-4 border-t border-gray-100 flex flex-wrap gap-2">
