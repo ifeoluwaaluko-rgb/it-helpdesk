@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'knowledge',
     'directory',
     'assets',
+    'settings_app',
 ]
 
 MIDDLEWARE = [

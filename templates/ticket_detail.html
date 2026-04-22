@@ -68,6 +68,38 @@
           {% for tag in ticket.tag_list %}<span class="tag">{{ tag }}</span>{% endfor %}
         </div>
         {% endif %}
+
+        {% if ticket.attachments.exists %}
+        <!-- Email / uploaded attachments -->
+        <div class="mt-5 pt-4 border-t border-[#e9ebed]">
+          <p class="text-xs font-semibold text-[#68737d] uppercase tracking-wide mb-3">📎 Attachments ({{ ticket.attachments.count }})</p>
+          <div class="flex flex-wrap gap-3">
+            {% for att in ticket.attachments.all %}
+              {% if att.is_image %}
+              <!-- Image thumbnail — click to open full size -->
+              <a href="{{ att.file.url }}" target="_blank" rel="noopener"
+                 class="group relative block w-28 h-28 rounded-xl overflow-hidden border border-[#e9ebed] hover:border-[#1f73b7] transition shadow-sm">
+                <img src="{{ att.file.url }}" alt="{{ att.filename }}"
+                     class="w-full h-full object-cover group-hover:scale-105 transition duration-200">
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-end">
+                  <p class="w-full text-center text-white text-[10px] py-1 bg-black/40 translate-y-full group-hover:translate-y-0 transition truncate px-1">{{ att.filename }}</p>
+                </div>
+              </a>
+              {% else %}
+              <!-- File attachment -->
+              <a href="{{ att.file.url }}" target="_blank" rel="noopener"
+                 class="flex items-center gap-2 bg-[#f3f4f6] hover:bg-[#e9ebed] border border-[#e9ebed] rounded-xl px-3 py-2.5 transition group">
+                <span class="text-2xl">📄</span>
+                <div>
+                  <p class="text-xs font-medium text-[#2f3941] group-hover:text-[#1f73b7] truncate max-w-[140px]">{{ att.filename }}</p>
+                  <p class="text-[10px] text-[#68737d]">{{ att.source|title }}</p>
+                </div>
+              </a>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
       </div>
     </div>
 

@@ -4,7 +4,7 @@ from django.utils import timezone
 
 
 class Profile(models.Model):
-    ROLES = [('associate','Associate'),('consultant','Consultant'),('senior','Senior'),('manager','Manager')]
+    ROLES = [('associate','Associate'),('consultant','Consultant'),('senior','Senior'),('manager','Manager'),('superadmin','Super Admin')]
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=20, choices=ROLES, default='associate')
     specialization = models.CharField(max_length=100, blank=True)
@@ -163,3 +163,29 @@ class EscalationRule(models.Model):
     is_active = models.BooleanField(default=True)
     class Meta: ordering = ['name']
     def __str__(self): return self.name
+
+
+class TicketAttachment(models.Model):
+    """File/image attached to a ticket — from email or manual upload."""
+    ticket       = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='attachments')
+    file         = models.FileField(upload_to='ticket_attachments/')
+    filename     = models.CharField(max_length=255, blank=True)
+    content_type = models.CharField(max_length=100, blank=True)
+    is_image     = models.BooleanField(default=False)
+    uploaded_at  = models.DateTimeField(auto_now_add=True)
+    source       = models.CharField(max_length=20, default='email',
+                                    choices=[('email','Email'),('manual','Manual')])
+
+    def save(self, *args, **kwargs):
+        if not self.filename and self.file:
+            self.filename = self.file.name.split('/')[-1]
+        import mimetypes
+        mime, _ = mimetypes.guess_type(self.filename or '')
+        self.is_image = bool(mime and mime.startswith('image/'))
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.filename} → Ticket #{self.ticket.id}"
+
+    class Meta:
+        ordering = ['uploaded_at']

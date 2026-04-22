@@ -33,7 +33,7 @@
       <select name="status" class="zd-input">
         {% for val, label in status_choices %}<option value="{{ val }}" {% if asset.status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
       </select>
-      <button type="submit" class="btn-secondary w-full text-center">Update Status</button>
+      <button type="submit" class="zd-btn zd-btn-primary w-full justify-center">Update Status</button>
     </form>
   </div>
   <div class="lg:col-span-2 space-y-5">

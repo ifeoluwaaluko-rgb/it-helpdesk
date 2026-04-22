@@ -52,7 +52,7 @@
         <div id="editor-area"
           contenteditable="true"
           class="border border-gray-200 rounded-b-lg px-4 py-3 text-sm text-gray-800 min-h-[240px] focus:outline-none focus:ring-2 focus:ring-blue-400 prose prose-sm max-w-none"
-          style="line-height:1.7">{{ article.content }}</div>
+          style="line-height:1.7" data-content="{{ article.content|escapejs }}"></div>
         <p class="text-xs text-gray-400 mt-1">Inline images will be embedded as base64 in the content. Use Attachments below for files.</p>
       </div>
 
@@ -112,6 +112,17 @@
   </div>
 </div>
 
+<!-- Image resize popover -->
+<div id="img-resize-popover" class="hidden fixed z-50 bg-white border border-gray-200 rounded-xl shadow-xl px-3 py-2 flex gap-1 items-center">
+  <span class="text-xs text-gray-400 mr-1">Size:</span>
+  <button onclick="resizeImg('25%')"  class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Small</button>
+  <button onclick="resizeImg('50%')"  class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Medium</button>
+  <button onclick="resizeImg('75%')"  class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Large</button>
+  <button onclick="resizeImg('100%')" class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Original</button>
+  <div class="w-px h-4 bg-gray-200 mx-1"></div>
+  <button onclick="hidePopover()" class="text-xs text-gray-400 hover:text-red-500 px-1">✕</button>
+</div>
+
 <script>
 document.querySelectorAll('.ql-btn[data-cmd]').forEach(btn => {
   btn.addEventListener('mousedown', e => {
@@ -138,7 +149,8 @@ function embedInlineImage(input) {
   const reader = new FileReader();
   reader.onload = e => {
     document.getElementById('editor-area').focus();
-    document.execCommand('insertHTML', false, `<img src="${e.target.result}" style="max-width:100%;border-radius:8px;margin:8px 0;" alt="embedded image">`);
+    document.execCommand('insertHTML', false, `<img src="${e.target.result}" style="width:100%;max-width:100%;border-radius:8px;margin:8px 0;cursor:pointer;" data-orig-size="100%" alt="embedded image">`);
+    bindImageClicks();
   };
   reader.readAsDataURL(file);
   input.value = '';
@@ -164,5 +176,45 @@ dz.addEventListener('drop', e => {
   updateFileList(fi);
 });
 document.getElementById('article-form').addEventListener('submit', syncContent);
+
+// ── Image resize popover ──────────────────────────────────────
+let _selectedImg = null;
+const popover = document.getElementById('img-resize-popover');
+
+function bindImageClicks() {
+  document.querySelectorAll('#editor-area img').forEach(img => {
+    img.style.cursor = 'pointer';
+    img.onclick = function(e) {
+      e.stopPropagation();
+      _selectedImg = img;
+      document.querySelectorAll('#editor-area img').forEach(i => i.style.outline = '');
+      img.style.outline = '2px solid #1f73b7';
+      const rect = img.getBoundingClientRect();
+      popover.style.left = rect.left + window.scrollX + 'px';
+      popover.style.top  = (rect.top + window.scrollY - 48) + 'px';
+      popover.classList.remove('hidden');
+    };
+  });
+}
+function resizeImg(pct) {
+  if (!_selectedImg) return;
+  _selectedImg.style.width = pct;
+  _selectedImg.style.maxWidth = '100%';
+  syncContent();
+}
+function hidePopover() {
+  popover.classList.add('hidden');
+  if (_selectedImg) { _selectedImg.style.outline = ''; _selectedImg = null; }
+}
+document.addEventListener('click', function(e) {
+  if (!popover.contains(e.target) && !e.target.closest('#editor-area img')) hidePopover();
+});
+// Set editor content as HTML (not escaped text)
+const rawContent = document.getElementById('editor-area')?.dataset?.content || '';
+if (rawContent) {
+  document.getElementById('editor-area').innerHTML = rawContent;
+}
+// Bind existing images on load (for edit mode where content is pre-filled)
+bindImageClicks();
 </script>
 {% endblock %}

@@ -95,6 +95,17 @@
   </div>
 </div>
 
+<!-- Image resize popover -->
+<div id="img-resize-popover" class="hidden fixed z-50 bg-white border border-gray-200 rounded-xl shadow-xl px-3 py-2 flex gap-1 items-center" style="pointer-events:auto;">
+  <span class="text-xs text-gray-400 mr-1">Size:</span>
+  <button onclick="resizeImg('25%')"  class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Small</button>
+  <button onclick="resizeImg('50%')"  class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Medium</button>
+  <button onclick="resizeImg('75%')"  class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Large</button>
+  <button onclick="resizeImg('100%')" class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Original</button>
+  <div class="w-px h-4 bg-gray-200 mx-1"></div>
+  <button onclick="hidePopover()" class="text-xs text-gray-400 hover:text-red-500 px-1">✕</button>
+</div>
+
 <script>
 // Toolbar commands
 document.querySelectorAll('.ql-btn[data-cmd]').forEach(btn => {
@@ -104,53 +115,41 @@ document.querySelectorAll('.ql-btn[data-cmd]').forEach(btn => {
     document.getElementById('editor-area').focus();
   });
 });
-
 document.getElementById('heading-select').addEventListener('change', function() {
   document.getElementById('editor-area').focus();
-  if (this.value) {
-    document.execCommand('formatBlock', false, this.value);
-  } else {
-    document.execCommand('formatBlock', false, 'p');
-  }
+  document.execCommand('formatBlock', false, this.value || 'p');
   this.value = '';
 });
-
 function insertLink() {
   const url = prompt('Enter URL:');
   if (url) document.execCommand('createLink', false, url);
 }
-
 function syncContent() {
   document.getElementById('content-hidden').value = document.getElementById('editor-area').innerHTML;
 }
-
-// Inline image embed into editor
 function embedInlineImage(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = function(e) {
-    const img = `<img src="${e.target.result}" style="max-width:100%;border-radius:8px;margin:8px 0;" alt="embedded image">`;
+    const img = `<img src="${e.target.result}" style="width:100%;max-width:100%;border-radius:8px;margin:8px 0;cursor:pointer;" data-orig-size="100%" alt="embedded image">`;
     document.getElementById('editor-area').focus();
     document.execCommand('insertHTML', false, img);
+    bindImageClicks();
   };
   reader.readAsDataURL(file);
   input.value = '';
 }
-
-// File attachment list preview
 function updateFileList(input) {
   const list = document.getElementById('file-list');
   list.innerHTML = '';
   Array.from(input.files).forEach(f => {
     const li = document.createElement('li');
     li.className = 'flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5 text-xs';
-    li.innerHTML = `<span class="text-gray-500">${f.type.startsWith('image/') ? '🖼' : '📄'}</span> <span class="font-medium">${f.name}</span> <span class="text-gray-400">(${(f.size/1024).toFixed(1)} KB)</span>`;
+    li.innerHTML = `<span>${f.type.startsWith('image/') ? '🖼' : '📄'}</span> <span class="font-medium">${f.name}</span> <span class="text-gray-400">(${(f.size/1024).toFixed(1)} KB)</span>`;
     list.appendChild(li);
   });
 }
-
-// Drag-and-drop on drop zone
 const dz = document.getElementById('drop-zone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('border-blue-400','bg-blue-50'); });
 dz.addEventListener('dragleave', () => dz.classList.remove('border-blue-400','bg-blue-50'));
@@ -161,8 +160,50 @@ dz.addEventListener('drop', e => {
   fi.files = e.dataTransfer.files;
   updateFileList(fi);
 });
-
-// Ensure content is synced on submit
 document.getElementById('article-form').addEventListener('submit', syncContent);
+
+// ── Image resize popover ──────────────────────────────────────
+let _selectedImg = null;
+const popover = document.getElementById('img-resize-popover');
+
+function bindImageClicks() {
+  document.querySelectorAll('#editor-area img').forEach(img => {
+    img.style.cursor = 'pointer';
+    img.onclick = function(e) {
+      e.stopPropagation();
+      _selectedImg = img;
+      // Highlight selected
+      document.querySelectorAll('#editor-area img').forEach(i => i.style.outline = '');
+      img.style.outline = '2px solid #1f73b7';
+      // Position popover above the image
+      const rect = img.getBoundingClientRect();
+      popover.style.left = rect.left + window.scrollX + 'px';
+      popover.style.top  = (rect.top + window.scrollY - 48) + 'px';
+      popover.classList.remove('hidden');
+    };
+  });
+}
+
+function resizeImg(pct) {
+  if (!_selectedImg) return;
+  _selectedImg.style.width = pct;
+  _selectedImg.style.maxWidth = '100%';
+  _selectedImg.dataset.origSize = pct;
+  syncContent();
+}
+
+function hidePopover() {
+  popover.classList.add('hidden');
+  if (_selectedImg) { _selectedImg.style.outline = ''; _selectedImg = null; }
+}
+
+document.addEventListener('click', function(e) {
+  if (!popover.contains(e.target) && !e.target.closest('#editor-area img')) {
+    hidePopover();
+  }
+});
+
+// Bind images already in editor on page load (edit mode)
+bindImageClicks();
 </script>
 {% endblock %}
