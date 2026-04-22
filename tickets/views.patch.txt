@@ -1,0 +1,11 @@
+In tickets/views.py, inside the dashboard view, replace:
+
+sla_candidates = list(all_tickets.filter(status__in=active_statuses).only('id', 'created_at', 'priority', 'status', 'resolved_at', 'sla_deadline'))
+
+with:
+
+sla_candidates = list(
+    all_tickets.filter(status__in=active_statuses).only(
+        'id', 'created_at', 'priority', 'status', 'resolved_at'
+    )
+)
