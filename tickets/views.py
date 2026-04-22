@@ -1,4 +1,3 @@
-import os
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, logout, authenticate
@@ -7,7 +6,7 @@ from django.utils import timezone
 from django.db.models import Count, Q
 from django.contrib import messages
 from django.http import JsonResponse, Http404
-from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment
+from .models import Ticket, TicketComment, TicketEditHistory, Profile
 from .classifier import classify, CATEGORY_TREE
 from .assignment import auto_assign
 from .notifications import notify_assignment, notify_status_change
@@ -17,10 +16,6 @@ from datetime import date, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
-
-ALLOWED_ATTACHMENT_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.pdf', '.docx', '.xlsx', '.txt', '.zip'}
-MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10 MB
-
 
 
 def get_role(user):
@@ -330,12 +325,11 @@ def ticket_delete(request, pk):
 def create_ticket(request):
     from directory.models import StaffMember
     if request.method == 'POST':
-        title = request.POST.get('title', '').strip()
+        title       = request.POST.get('title', '').strip()
         description = request.POST.get('description', '').strip()
-        user_email = request.POST.get('user_email', '').strip()
-        channel = request.POST.get('channel', 'manual')
-        staff_id = request.POST.get('staff_member', '').strip()
-        attachment = request.FILES.get('attachment')
+        user_email  = request.POST.get('user_email', '').strip()
+        channel     = request.POST.get('channel', 'manual')
+        staff_id    = request.POST.get('staff_member', '').strip()
 
         valid_channels = [c for c, _ in Ticket.CHANNEL_CHOICES]
         if channel not in valid_channels:
@@ -363,22 +357,6 @@ def create_ticket(request):
                         ticket.save()
                     except (StaffMember.DoesNotExist, ValueError):
                         pass
-
-                if attachment:
-                    ext = os.path.splitext(attachment.name)[1].lower()
-                    if attachment.size > MAX_ATTACHMENT_SIZE:
-                        messages.warning(request, 'Attachment was skipped because it exceeded the 10 MB limit.')
-                    elif ext not in ALLOWED_ATTACHMENT_EXTENSIONS:
-                        messages.warning(request, 'Attachment type is not allowed and was skipped.')
-                    else:
-                        TicketAttachment.objects.create(
-                            ticket=ticket,
-                            file=attachment,
-                            filename=attachment.name,
-                            content_type=getattr(attachment, 'content_type', '') or '',
-                            source='manual',
-                        )
-
                 try:
                     assignee = auto_assign(ticket)
                     if assignee:
@@ -390,7 +368,6 @@ def create_ticket(request):
                 messages.success(request, f'Ticket #{ticket.id} created.')
                 return redirect('ticket_detail', pk=ticket.id)
             except Exception as e:
-                logger.exception('Ticket create failed')
                 messages.error(request, f'Could not create ticket: {e}')
 
     staff_members = []
@@ -402,8 +379,6 @@ def create_ticket(request):
     return render(request, 'create_ticket.html', {
         'staff_members': staff_members,
         'channel_choices': Ticket.CHANNEL_CHOICES,
-        'allowed_attachment_types': ', '.join(sorted(ALLOWED_ATTACHMENT_EXTENSIONS)),
-        'max_attachment_mb': 10,
     })
 
 
