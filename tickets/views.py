@@ -5,7 +5,6 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models import Count, Q
-from django.db.models.functions import TruncDate
 from django.contrib import messages
 from django.conf import settings
 from django.http import JsonResponse, Http404, FileResponse
@@ -180,6 +179,8 @@ def can_delete_edit(user):
 
 
 def login_view(request):
+    if not User.objects.exists():
+        return redirect('first_time_setup')
     if request.user.is_authenticated:
         return redirect('dashboard')
     if request.method == 'POST':
@@ -199,33 +200,6 @@ def logout_view(request):
     return redirect('login')
 
 
-
-
-def _ticket_sla_compliance_percent(qs):
-    closed = list(qs.filter(status__in=['resolved', 'closed']))
-    if not closed:
-        return 100
-    sla_ok = sum(1 for t in closed if t.resolved_at and t.resolved_at <= t.sla_deadline)
-    return round((sla_ok / len(closed)) * 100)
-
-
-def _chart_series_for_last_7_days(qs):
-    today = timezone.localdate()
-    start = today - timedelta(days=6)
-    rows = (
-        qs.filter(created_at__date__gte=start, created_at__date__lte=today)
-        .annotate(day=TruncDate('created_at'))
-        .values('day')
-        .annotate(count=Count('id'))
-        .order_by('day')
-    )
-    counts_by_day = {row['day']: row['count'] for row in rows}
-    labels, data = [], []
-    for i in range(6, -1, -1):
-        day = today - timedelta(days=i)
-        labels.append(day.strftime('%b %d'))
-        data.append(counts_by_day.get(day, 0))
-    return labels, data
 @login_required
 def dashboard(request):
     user = request.user
@@ -234,22 +208,30 @@ def dashboard(request):
     is_consultant = role in ('consultant', 'senior')
 
     all_tickets = Ticket.objects.select_related('assigned_to').all()
-    my_tickets = all_tickets.filter(assigned_to=user).exclude(status__in=['resolved', 'closed'])
+    my_tickets = all_tickets.filter(assigned_to=user).exclude(status__in=['resolved','closed'])
     unassigned = all_tickets.filter(assigned_to__isnull=True, status__in=['open'])
 
     total = all_tickets.count()
     open_count = all_tickets.filter(status='open').count()
     in_progress = all_tickets.filter(status='in_progress').count()
     resolved_count = all_tickets.filter(status='resolved').count()
-    sla_breached_ids = [t.id for t in all_tickets.filter(status__in=['open', 'in_progress', 'pending']) if t.is_sla_breached]
+    sla_breached_ids = [t.id for t in all_tickets.filter(status__in=['open','in_progress','pending']) if t.is_sla_breached]
 
-    sla_compliance = _ticket_sla_compliance_percent(all_tickets)
+    closed = all_tickets.filter(status__in=['resolved','closed'])
+    sla_ok = sum(1 for t in closed if t.resolved_at and t.resolved_at <= t.sla_deadline)
+    sla_compliance = round((sla_ok / closed.count()) * 100) if closed.exists() else 100
 
     resolved_tickets = all_tickets.filter(resolved_at__isnull=False)
     resolution_seconds = [t.resolution_time_seconds for t in resolved_tickets if t.resolution_time_seconds is not None]
     avg_resolution = round(sum(resolution_seconds) / len(resolution_seconds)) if resolution_seconds else 0
 
-    chart_labels, chart_data = _chart_series_for_last_7_days(all_tickets)
+    today = date.today()
+    chart_labels, chart_data = [], []
+    for i in range(6, -1, -1):
+        day = today - timedelta(days=i)
+        chart_labels.append(day.strftime('%b %d'))
+        chart_data.append(all_tickets.filter(created_at__date=day).count())
+
     category_counts = all_tickets.values('category').annotate(count=Count('id')).order_by('-count')
 
     cat_resolution = {}
@@ -263,11 +245,11 @@ def dashboard(request):
     staff_workload = []
     if is_manager:
         staff = User.objects.filter(is_staff=True).annotate(
-            open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open', 'in_progress']))
+            open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open','in_progress']))
         ).order_by('-open_count')
         staff_workload = list(staff)
 
-    my_resolved = all_tickets.filter(assigned_to=user, status__in=['resolved', 'closed']).count()
+    my_resolved = all_tickets.filter(assigned_to=user, status__in=['resolved','closed']).count()
     my_total_assigned = all_tickets.filter(assigned_to=user).count()
     my_productivity = round((my_resolved / my_total_assigned) * 100) if my_total_assigned > 0 else 0
 
@@ -277,9 +259,9 @@ def dashboard(request):
     recurring_issues = _get_recurring_issue_summary() if is_manager else []
 
     kpis = [
-        (open_count, 'Open', 'text-[#1f73b7]', ''),
-        (in_progress, 'In Progress', 'text-[#f79a3e]', ''),
-        (resolved_count, 'Resolved', 'text-green-600', ''),
+        (open_count,            'Open',        'text-[#1f73b7]', ''),
+        (in_progress,           'In Progress', 'text-[#f79a3e]', ''),
+        (resolved_count,        'Resolved',    'text-green-600', ''),
         (len(sla_breached_ids), 'SLA Breached', 'text-red-500' if sla_breached_ids else 'text-[#68737d]', ''),
     ]
 
@@ -291,13 +273,9 @@ def dashboard(request):
         'is_consultant': is_consultant,
         'role': role,
         'stats': {
-            'total': total,
-            'open': open_count,
-            'in_progress': in_progress,
-            'resolved': resolved_count,
-            'sla_breached': len(sla_breached_ids),
-            'unassigned': unassigned.count(),
-            'sla_compliance': sla_compliance,
+            'total': total, 'open': open_count, 'in_progress': in_progress,
+            'resolved': resolved_count, 'sla_breached': len(sla_breached_ids),
+            'unassigned': unassigned.count(), 'sla_compliance': sla_compliance,
             'avg_resolution': avg_resolution,
             'avg_first_response': avg_first_response,
         },
@@ -315,7 +293,6 @@ def dashboard(request):
         'recurring_issues': recurring_issues,
     }
     return render(request, 'dashboard.html', context)
-
 
 
 @login_required
@@ -656,27 +633,22 @@ def live_dashboard(request):
     in_progress_t = all_tickets.filter(status='in_progress').count()
     resolved_t = all_tickets.filter(status='resolved').count()
     total = all_tickets.count()
-    sla_compliance = _ticket_sla_compliance_percent(all_tickets)
+    closed = all_tickets.filter(status__in=['resolved','closed'])
+    sla_ok = sum(1 for t in closed if t.resolved_at and t.resolved_at <= t.sla_deadline)
+    sla_compliance = round((sla_ok/closed.count())*100) if closed.exists() else 100
     times = [t.resolution_time_seconds for t in all_tickets.filter(resolved_at__isnull=False) if t.resolution_time_seconds is not None]
-    avg_resolution = round(sum(times) / len(times)) if times else 0
+    avg_resolution = round(sum(times)/len(times)) if times else 0
     total_assigned = all_tickets.exclude(assigned_to__isnull=True).count()
-    productivity = round((resolved_t / total_assigned) * 100) if total_assigned > 0 else 0
-    sla_breached = sum(1 for t in all_tickets.filter(status__in=['open', 'in_progress']) if t.is_sla_breached)
+    productivity = round((resolved_t/total_assigned)*100) if total_assigned > 0 else 0
+    sla_breached = sum(1 for t in all_tickets.filter(status__in=['open','in_progress']) if t.is_sla_breached)
     agents = User.objects.filter(is_staff=True).annotate(
-        open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open', 'in_progress']))
-    ).order_by('-open_count')
+        open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open','in_progress']))
+    )
     return render(request, 'live_dashboard.html', {
-        'open_t': open_t,
-        'in_progress_t': in_progress_t,
-        'resolved_t': resolved_t,
-        'total': total,
-        'sla_compliance': sla_compliance,
-        'avg_resolution': avg_resolution,
-        'productivity': productivity,
-        'sla_breached': sla_breached,
-        'agents': agents,
+        'open':open_t,'in_progress':in_progress_t,'resolved':resolved_t,
+        'total':total,'sla_compliance':sla_compliance,'avg_resolution':avg_resolution,
+        'productivity':productivity,'sla_breached':sla_breached,'agents':agents,
     })
-
 
 
 @login_required
@@ -785,3 +757,53 @@ def protected_media(request, path):
 
     content_type, _ = mimetypes.guess_type(str(requested))
     return FileResponse(open(requested, 'rb'), content_type=content_type or 'application/octet-stream')
+
+
+def first_time_setup(request):
+    if User.objects.exists():
+        return redirect('login')
+
+    if request.method == 'POST':
+        full_name = request.POST.get('full_name', '').strip()
+        username = request.POST.get('username', '').strip()
+        email = request.POST.get('email', '').strip()
+        password = request.POST.get('password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+
+        if not all([full_name, username, email, password, confirm_password]):
+            messages.error(request, 'All fields are required.')
+            return render(request, 'setup_first_admin.html')
+
+        if password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+            return render(request, 'setup_first_admin.html')
+
+        if User.objects.filter(username=username).exists():
+            messages.error(request, 'Username already exists.')
+            return render(request, 'setup_first_admin.html')
+
+        if User.objects.filter(email=email).exists():
+            messages.error(request, 'Email already exists.')
+            return render(request, 'setup_first_admin.html')
+
+        first_name, *rest = full_name.split()
+        last_name = ' '.join(rest)
+
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            is_staff=True,
+            is_superuser=True,
+        )
+        profile, _ = Profile.objects.get_or_create(user=user)
+        profile.role = 'superadmin'
+        profile.save(update_fields=['role'])
+
+        login(request, user)
+        messages.success(request, 'Administrator account created successfully.')
+        return redirect('dashboard')
+
+    return render(request, 'setup_first_admin.html')
