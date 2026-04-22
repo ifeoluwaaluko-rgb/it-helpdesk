@@ -8,7 +8,7 @@ from django.db.models import Count, Q
 from django.contrib import messages
 from django.conf import settings
 from django.http import JsonResponse, Http404, FileResponse
-from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment
+from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment, TicketStatusEvent
 from .classifier import classify, CATEGORY_TREE
 from .assignment import auto_assign
 from .notifications import notify_assignment, notify_status_change, notify_ticket_received
@@ -38,6 +38,18 @@ def _mark_first_response(ticket):
     if not ticket.first_response_at:
         ticket.first_response_at = timezone.now()
         ticket.save(update_fields=['first_response_at', 'updated_at'])
+
+
+
+def _log_status_event(ticket, actor, action, from_status='', to_status='', note=''):
+    TicketStatusEvent.objects.create(
+        ticket=ticket,
+        actor=actor,
+        action=action,
+        from_status=from_status or '',
+        to_status=to_status or '',
+        note=(note or '')[:255],
+    )
 
 
 def _normalize_issue_signature(ticket):
@@ -274,11 +286,13 @@ def ticket_detail(request, pk):
                 _mark_first_response(ticket)
 
         elif action == 'pickup' and not ticket.assigned_to:
+            previous_status = ticket.status
             ticket.assigned_to = request.user
             ticket.status = 'in_progress'
             ticket.save()
             _mark_first_response(ticket)
             notify_assignment(ticket, request.user)
+            _log_status_event(ticket, request.user, 'picked_up', from_status=previous_status, to_status='in_progress', note=f'Picked up by {request.user.get_full_name() or request.user.username}.')
             messages.success(request, f'You picked up ticket #{ticket.id}.')
 
         elif action == 'update_status':
@@ -295,13 +309,19 @@ def ticket_detail(request, pk):
 
                 ticket.status = new_status
 
-                if new_status == 'resolved':
+                if new_status in ['resolved', 'closed']:
                     if not ticket.resolved_at:
                         ticket.resolved_at = timezone.now()
                         update_fields.append('resolved_at')
-                elif new_status in ['open', 'in_progress', 'pending'] and ticket.resolved_at:
-                    ticket.resolved_at = None
-                    update_fields.append('resolved_at')
+                    ticket.resolved_by = request.user
+                    update_fields.append('resolved_by')
+                elif new_status in ['open', 'in_progress', 'pending']:
+                    if ticket.resolved_at:
+                        ticket.resolved_at = None
+                        update_fields.append('resolved_at')
+                    if ticket.resolved_by_id is not None:
+                        ticket.resolved_by = None
+                        update_fields.append('resolved_by')
 
                 ticket.save(update_fields=update_fields)
 
@@ -309,13 +329,27 @@ def ticket_detail(request, pk):
                     _mark_first_response(ticket)
 
                 if new_status != old_status:
+                    action_name = 'status_changed'
+                    note = ''
+                    if new_status == 'resolved':
+                        action_name = 'resolved'
+                        note = f'Resolved by {request.user.get_full_name() or request.user.username}.'
+                    elif new_status == 'closed':
+                        action_name = 'closed'
+                        note = f'Closed by {request.user.get_full_name() or request.user.username}.'
+                    elif old_status in ['resolved', 'closed'] and new_status in ['open', 'in_progress', 'pending']:
+                        action_name = 'reopened'
+                        note = f'Reopened by {request.user.get_full_name() or request.user.username}.'
+
+                    _log_status_event(ticket, request.user, action_name, from_status=old_status, to_status=new_status, note=note)
+
                     try:
                         notify_status_change(ticket, request.user)
                     except Exception:
                         logger.exception('Failed to send status change notification for ticket %s', ticket.id)
                     messages.success(
                         request,
-                        f'Ticket #{ticket.id} status updated from {ticket.get_status_display() if old_status == new_status else dict(Ticket.STATUS_CHOICES).get(old_status, old_status)} to {ticket.get_status_display()}.'
+                        f'Ticket #{ticket.id} status updated from {dict(Ticket.STATUS_CHOICES).get(old_status, old_status)} to {ticket.get_status_display()}.'
                     )
                 else:
                     messages.info(request, f'Ticket #{ticket.id} is already marked as {ticket.get_status_display()}.')
@@ -334,8 +368,21 @@ def ticket_detail(request, pk):
                     if ticket.assigned_to and (not old or old.id != ticket.assigned_to.id):
                         notify_assignment(ticket, ticket.assigned_to)
                         _mark_first_response(ticket)
+                        action_name = 'reassigned' if old else 'assigned'
+                        note = f'Assigned to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}'
+                        if old:
+                            note = f'Reassigned from {old.get_full_name() or old.username} to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}'
+                        _log_status_event(ticket, request.user, action_name, from_status=ticket.status, to_status=ticket.status, note=note)
+                        if old:
+                            messages.success(request, f'Ticket #{ticket.id} reassigned from {old.get_full_name() or old.username} to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}.')
+                        else:
+                            messages.success(request, f'Ticket #{ticket.id} assigned to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}.')
+                    else:
+                        messages.info(request, 'Ticket assignee is unchanged.')
                 except (ValueError, User.DoesNotExist):
                     messages.error(request, 'Invalid staff selection.')
+            else:
+                messages.error(request, 'Please choose a staff member to reassign this ticket.')
 
         elif action == 'update_category':
             # Save snapshot before changing
@@ -355,12 +402,14 @@ def ticket_detail(request, pk):
         return redirect('ticket_detail', pk=pk)
 
     staff_users = User.objects.filter(is_staff=True).select_related('profile') if can_assign(request.user) else []
+    status_events = ticket.status_events.select_related('actor')[:12]
 
     return render(request, 'ticket_detail.html', {
         'ticket': ticket,
         'comments': comments,
         'related_articles': related_articles,
         'staff_users': staff_users,
+        'status_events': status_events,
         'status_choices': Ticket.STATUS_CHOICES,
         'category_choices': Ticket.CATEGORY_CHOICES,
         'category_tree_json': json.dumps(CATEGORY_TREE),
@@ -583,6 +632,60 @@ def item_api(request):
     data = CATEGORY_TREE.get(cat,{}).get('subcategories',{}).get(sub,[])
     return JsonResponse({'items': data})
 
+
+
+
+@login_required
+def dashboard_snapshot_api(request):
+    all_tickets = Ticket.objects.select_related('assigned_to').all()
+    data = {
+        'open': all_tickets.filter(status='open').count(),
+        'in_progress': all_tickets.filter(status='in_progress').count(),
+        'resolved': all_tickets.filter(status='resolved').count(),
+        'total': all_tickets.count(),
+        'unassigned': all_tickets.filter(assigned_to__isnull=True, status='open').count(),
+        'my_open': all_tickets.filter(assigned_to=request.user).exclude(status__in=['resolved', 'closed']).count(),
+    }
+    return JsonResponse(data)
+
+
+@login_required
+def ticket_list_snapshot_api(request):
+    tickets = Ticket.objects.select_related('assigned_to').all()
+    q = request.GET.get('q','').strip()
+    status_filter = request.GET.get('status')
+    priority_filter = request.GET.get('priority')
+    category_filter = request.GET.get('category')
+    assigned_filter = request.GET.get('mine')
+    unassigned_filter = request.GET.get('unassigned')
+
+    if q:
+        tickets = tickets.filter(Q(title__icontains=q)|Q(description__icontains=q)|Q(user_email__icontains=q)|Q(requester_name__icontains=q))
+    if status_filter:
+        tickets = tickets.filter(status=status_filter)
+    if priority_filter:
+        tickets = tickets.filter(priority=priority_filter)
+    if category_filter:
+        tickets = tickets.filter(category=category_filter)
+    if assigned_filter == '1':
+        tickets = tickets.filter(assigned_to=request.user)
+    if unassigned_filter == '1':
+        tickets = tickets.filter(assigned_to__isnull=True)
+
+    items = []
+    for t in tickets.order_by('-created_at')[:50]:
+        items.append({
+            'id': t.id,
+            'title': t.title,
+            'status': t.get_status_display(),
+            'priority': t.get_priority_display(),
+            'requester': t.requester_name or t.user_email,
+            'category': t.category_display,
+            'assigned_to': (t.assigned_to.get_full_name() or t.assigned_to.username) if t.assigned_to else 'Unassigned',
+            'created_at': t.created_at.isoformat(),
+            'url': f'/tickets/{t.id}/',
+        })
+    return JsonResponse({'count': tickets.count(), 'items': items})
 
 
 @login_required

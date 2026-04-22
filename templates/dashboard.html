@@ -3,7 +3,7 @@
 {% block title %}Dashboard — IT Helpdesk{% endblock %}
 {% block breadcrumb %}Dashboard{% endblock %}
 {% block content %}
-
+<div data-dashboard-page="1"></div>
 {% if is_manager %}
 <!-- ══ MANAGER VIEW ══ -->
 <div class="flex items-center justify-between mb-5">
@@ -226,12 +226,16 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block extra_js %}
 <script>
-const ctx = document.getElementById('volumeChart');
-if(ctx) new Chart(ctx, {
-  type:'bar',
-  data:{labels:{{ chart_labels|safe }},datasets:[{label:'Tickets',data:{{ chart_data|safe }},backgroundColor:'rgba(31,115,183,0.85)',borderRadius:4,borderSkipped:false}]},
-  options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1},grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}
+document.addEventListener('DOMContentLoaded', function () {
+  if (!document.querySelector('[data-dashboard-page]')) return;
+  setInterval(function () {
+    if (document.hidden) return;
+    window.location.reload();
+  }, 15000);
 });
 </script>
 {% endblock %}

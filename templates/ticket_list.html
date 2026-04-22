@@ -2,8 +2,7 @@
 {% block title %}Tickets — IT Helpdesk{% endblock %}
 {% block breadcrumb %}Tickets{% endblock %}
 {% block content %}
-
-<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+<div data-ticket-list-page="1" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
   <div>
     <h1 class="text-lg font-bold text-[#2f3941]">Tickets</h1>
     <p class="text-xs text-[#68737d]">{{ result_count }} ticket{{ result_count|pluralize }}</p>
@@ -93,4 +92,18 @@
     </tbody>
   </table>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (!document.querySelector('[data-ticket-list-page]')) return;
+  setInterval(function () {
+    if (document.hidden) return;
+    const active = document.activeElement;
+    if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return;
+    window.location.reload();
+  }, 15000);
+});
+</script>
 {% endblock %}
