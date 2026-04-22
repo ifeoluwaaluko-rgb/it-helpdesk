@@ -1,4 +1,6 @@
 import html
+import re
+import json
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -11,19 +13,31 @@ def _normalize_rich_text(content):
     content = (content or '').strip()
     if not content:
         return ''
-    # Decode unicode-escaped HTML fragments like \u003Cdiv\u003E
-    if '\\u003C' in content or '\\u003E' in content or '\\u0026' in content:
-        try:
-            content = content.encode('utf-8').decode('unicode_escape')
-        except Exception:
-            pass
-    # Decode HTML entities that may have been stored escaped
-    try:
-        content = html.unescape(content)
-    except Exception:
-        pass
-    return content
 
+    # Repeatedly decode common escaped representations produced by editors / JSON serialization.
+    for _ in range(3):
+        previous = content
+
+        # Convert double-escaped unicode sequences first (e.g. \\u003Cdiv\\u003E)
+        content = re.sub(r'\\\\u([0-9a-fA-F]{4})', lambda m: chr(int(m.group(1), 16)), content)
+
+        # Convert single-escaped unicode sequences (e.g. \u003Cdiv\u003E)
+        content = re.sub(r'\\u([0-9a-fA-F]{4})', lambda m: chr(int(m.group(1), 16)), content)
+
+        # Decode HTML entities like &lt;div&gt;
+        content = html.unescape(content)
+
+        # If it still looks like a JSON string, try to decode once
+        if (content.startswith('"') and content.endswith('"')) or '\\u' in content:
+            try:
+                content = json.loads(content)
+            except Exception:
+                pass
+
+        if content == previous:
+            break
+
+    return content
 
 
 def _get_role(user):
@@ -50,6 +64,14 @@ def article_list(request):
         articles = articles.filter(title__icontains=q) | articles.filter(content__icontains=q) | articles.filter(tags__icontains=q)
     if category:
         articles = articles.filter(category=category)
+
+    for article in articles:
+        normalized = _normalize_rich_text(article.content)
+        preview = re.sub(r'<[^>]+>', ' ', normalized)
+        preview = html.unescape(preview)
+        preview = re.sub(r'\s+', ' ', preview).strip()
+        article.preview_text = preview
+
     return render(request, 'knowledge/article_list.html', {
         'articles': articles,
         'category_choices': Article.CATEGORY_CHOICES,

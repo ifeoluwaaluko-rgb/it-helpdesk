@@ -26,7 +26,7 @@
       {% endfor %}
       {% endif %}
     </div>
-    <div class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ revision.content }}</div>
+    <div class="text-sm text-gray-700 prose prose-sm max-w-none leading-relaxed">{{ decoded_revision_content|safe }}</div>
   </div>
 </div>
 {% endblock %}

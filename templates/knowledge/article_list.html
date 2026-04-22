@@ -37,7 +37,7 @@
       <h3 class="font-semibold text-gray-800 text-sm leading-snug">{{ article.title }}</h3>
       <span class="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full flex-shrink-0 capitalize">{{ article.get_category_display }}</span>
     </div>
-    <p class="text-xs text-gray-500 mb-3">{{ article.content|truncatechars:100 }}</p>
+    <p class="text-xs text-gray-500 mb-3">{{ article.preview_text|truncatechars:100 }}</p>
     {% if article.tag_list %}
     <div class="flex flex-wrap gap-1">
       {% for tag in article.tag_list %}
