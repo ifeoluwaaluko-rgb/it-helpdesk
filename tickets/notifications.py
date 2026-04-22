@@ -25,7 +25,7 @@ def _safe_send(subject, body, recipients):
         result = send_mail(
             subject=subject,
             message=body,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None) or getattr(settings, "EMAIL_HOST_USER", None),
             recipient_list=recipients,
             fail_silently=True,
         )
