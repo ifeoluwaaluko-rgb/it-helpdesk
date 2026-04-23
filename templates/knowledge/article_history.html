@@ -15,9 +15,9 @@
         <span class="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full font-semibold">Current Version</span>
         <p class="text-sm font-medium text-gray-700 mt-2">{{ article.title }}</p>
         <p class="text-xs text-gray-500 mt-1">
-          📝 Originally created by <strong>{{ article.created_by.get_full_name|default:article.created_by.username }}</strong> on {{ article.created_at|date:"M d, Y" }}
+          📝 Originally created by <strong>{{ article.created_by.get_full_name|default:article.created_by.username }}</strong> on <span data-local-dt="{{ article.created_at|date:'c' }}" data-local-style="date">{{ article.created_at|date:"M d, Y" }}</span>
           {% if article.last_modified_by %}
-          · ✏️ Last modified by <strong>{{ article.last_modified_by.get_full_name|default:article.last_modified_by.username }}</strong> on {{ article.updated_at|date:"M d, Y H:i" }}
+          · ✏️ Last modified by <strong>{{ article.last_modified_by.get_full_name|default:article.last_modified_by.username }}</strong> on <span data-local-dt="{{ article.updated_at|date:'c' }}" data-local-style="datetime">{{ article.updated_at|date:"M d, Y H:i" }}</span>
           {% endif %}
         </p>
       </div>
@@ -35,7 +35,7 @@
           <p class="text-sm font-medium text-gray-700">{{ rev.title }}</p>
           <p class="text-xs text-gray-500 mt-1">
             Saved by <strong>{{ rev.edited_by.get_full_name|default:rev.edited_by.username|default:"Unknown" }}</strong>
-            on {{ rev.edited_at|date:"M d, Y H:i" }}
+            on <span data-local-dt="{{ rev.edited_at|date:'c' }}" data-local-style="datetime">{{ rev.edited_at|date:"M d, Y H:i" }}</span>
           </p>
           {% if rev.revision_note %}
           <p class="text-xs text-blue-600 mt-1 italic">"{{ rev.revision_note }}"</p>

@@ -21,5 +21,5 @@ def ensure_profiles_exist(sender, **kwargs):
         try:
             for user in User.objects.all():
                 Profile.objects.get_or_create(user=user)
-        except Exception:
+        except RuntimeError:
             pass  # DB tables may not exist yet on first migrate

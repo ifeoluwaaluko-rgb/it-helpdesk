@@ -2,6 +2,5 @@
 set -e
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
-python seed.py
-python manage.py fetch_emails --loop --sleep 60 &
-gunicorn helpdesk.wsgi --bind 0.0.0.0:$PORT --log-file -
+python manage.py seed_demo_data --if-empty
+exec gunicorn helpdesk.wsgi --bind 0.0.0.0:$PORT --log-file -

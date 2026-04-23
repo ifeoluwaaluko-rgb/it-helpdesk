@@ -23,7 +23,7 @@
           <div class="flex items-center gap-2 mb-1">
             <div class="w-6 h-6 rounded-full bg-[#e9ebed] text-[#2f3941] text-xs font-bold flex items-center justify-center">{{ h.edited_by.username|first|upper }}</div>
             <span class="text-xs font-semibold text-[#2f3941]">{{ h.edited_by.get_full_name|default:h.edited_by.username }}</span>
-            <span class="text-xs text-[#68737d]">{{ h.edited_at|date:"M d, Y H:i" }}</span>
+            <span class="text-xs text-[#68737d]" data-local-dt="{{ h.edited_at|date:'c' }}" data-local-style="datetime">{{ h.edited_at|date:"M d, Y H:i" }}</span>
             {% if h.edit_note %}<span class="tag italic">{{ h.edit_note }}</span>{% endif %}
           </div>
           <p class="text-sm text-[#2f3941] font-medium">{{ h.title }}</p>
