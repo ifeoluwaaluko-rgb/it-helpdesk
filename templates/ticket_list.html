@@ -1,28 +1,7 @@
 {% extends 'base.html' %}
-{% load ticket_time %}
-{% block title %}Tickets — IT Helpdesk</div>
-{% endblock %}
-{% block extra_js %}
-<script>
-(function(){
-  async function refreshTicketList(){
-    const region=document.getElementById('ticket-list-live-region');
-    if(!region) return;
-    try {
-      const res=await fetch(window.location.pathname+window.location.search,{headers:{'X-Requested-With':'XMLHttpRequest'}});
-      const html=await res.text();
-      const doc=new DOMParser().parseFromString(html,'text/html');
-      const next=doc.getElementById('ticket-list-live-region');
-      if(next){ region.innerHTML=next.innerHTML; }
-    } catch(e) {}
-  }
-  setInterval(refreshTicketList, 5000);
-})();
-</script>
-{% endblock %}
+{% block title %}Tickets — IT Helpdesk{% endblock %}
 {% block breadcrumb %}Tickets{% endblock %}
 {% block content %}
-<div id="ticket-list-live-region">
 
 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
   <div>

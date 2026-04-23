@@ -2,25 +2,48 @@
 {% block title %}Staff Directory{% endblock %}
 {% block content %}
 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-  <div><h1 class="text-xl font-bold text-gray-900">Staff Directory</h1><p class="text-sm text-gray-500">{{ staff.count }} member{{ staff.count|pluralize }}</p></div>
-  <div class="flex gap-2 flex-wrap">
-    <a href="{% url 'import_staff' %}" class="zd-btn zd-btn-secondary text-xs">📥 Import CSV</a>
-    <a href="{% url 'staff_template' %}" class="zd-btn zd-btn-secondary text-xs">⬇ Template</a>
-    <a href="{% url 'staff_create' %}" class="zd-btn zd-btn-primary text-xs">+ Add Staff</a>
+  <div>
+    <h1 class="text-xl font-bold text-gray-900">Staff Directory</h1>
+    <p class="text-sm text-gray-500">{{ staff.count }} member{{ staff.count|pluralize }}</p>
   </div>
+  {% if can_manage_directory %}
+  <div class="flex gap-2 flex-wrap">
+    <a href="{% url 'import_staff' %}" class="zd-btn zd-btn-secondary text-xs">Import CSV</a>
+    <a href="{% url 'staff_template' %}" class="zd-btn zd-btn-secondary text-xs">Download Template</a>
+    <a href="{% url 'staff_create' %}" class="zd-btn zd-btn-primary text-xs">Add Staff</a>
+  </div>
+  {% endif %}
 </div>
 <form method="get" class="card mb-5 flex flex-wrap gap-3 items-end">
-  <div class="flex-1 min-w-40"><label class="block text-xs text-gray-500 mb-1">Search</label><input name="q" value="{{ q|default:'' }}" placeholder="Name or email..." class="zd-input"></div>
-  <div><label class="block text-xs text-gray-500 mb-1">Department</label><select name="dept" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"><option value="">All</option>{% for d in departments %}<option value="{{ d.id }}" {% if selected_dept == d.id|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+  <div class="flex-1 min-w-40">
+    <label class="block text-xs text-gray-500 mb-1">Search</label>
+    <input name="q" value="{{ q|default:'' }}" placeholder="Name or email..." class="zd-input">
+  </div>
+  <div>
+    <label class="block text-xs text-gray-500 mb-1">Department</label>
+    <select name="dept" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <option value="">All</option>
+      {% for d in departments %}
+      <option value="{{ d.id }}" {% if selected_dept == d.id|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
   <button type="submit" class="zd-btn zd-btn-primary">Filter</button>
   <a href="{% url 'staff_list' %}" class="zd-btn zd-btn-secondary">Clear</a>
 </form>
 <div class="card overflow-hidden p-0">
   <div class="overflow-x-auto">
     <table class="w-full text-sm min-w-[500px]">
-      <thead class="bg-gray-50 border-b border-gray-100"><tr class="text-left text-xs text-gray-400 uppercase">
-        <th class="px-5 py-3 font-medium">Name</th><th class="px-5 py-3 font-medium">Email</th><th class="px-5 py-3 font-medium hidden md:table-cell">Department</th><th class="px-5 py-3 font-medium hidden lg:table-cell">Title</th><th class="px-5 py-3 font-medium">Status</th><th class="px-5 py-3 font-medium"></th>
-      </tr></thead>
+      <thead class="bg-gray-50 border-b border-gray-100">
+        <tr class="text-left text-xs text-gray-400 uppercase">
+          <th class="px-5 py-3 font-medium">Name</th>
+          <th class="px-5 py-3 font-medium">Email</th>
+          <th class="px-5 py-3 font-medium hidden md:table-cell">Department</th>
+          <th class="px-5 py-3 font-medium hidden lg:table-cell">Title</th>
+          <th class="px-5 py-3 font-medium">Status</th>
+          <th class="px-5 py-3 font-medium"></th>
+        </tr>
+      </thead>
       <tbody class="divide-y divide-gray-50">
       {% for m in staff %}
       <tr class="hover:bg-gray-50">
@@ -31,10 +54,14 @@
           </div>
         </td>
         <td class="px-5 py-3 text-gray-500">{{ m.email }}</td>
-        <td class="px-5 py-3 text-gray-500 hidden md:table-cell">{{ m.department.name|default:"—" }}</td>
-        <td class="px-5 py-3 text-gray-500 hidden lg:table-cell">{{ m.job_title|default:"—" }}</td>
-        <td class="px-5 py-3"><span class="badge {% if m.is_active %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-500{% endif %}">{% if m.is_active %}Active{% else %}Inactive{% endif %}</span></td>
-        <td class="px-5 py-3"><a href="{% url 'staff_detail' m.pk %}" class="text-xs text-blue-600 hover:underline">View →</a></td>
+        <td class="px-5 py-3 text-gray-500 hidden md:table-cell">{{ m.department.name|default:"-" }}</td>
+        <td class="px-5 py-3 text-gray-500 hidden lg:table-cell">{{ m.job_title|default:"-" }}</td>
+        <td class="px-5 py-3">
+          <span class="badge {% if m.is_active %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-500{% endif %}">
+            {% if m.is_active %}Active{% else %}Inactive{% endif %}
+          </span>
+        </td>
+        <td class="px-5 py-3"><a href="{% url 'staff_detail' m.pk %}" class="text-xs text-blue-600 hover:underline">View</a></td>
       </tr>
       {% empty %}
       <tr><td colspan="6" class="px-5 py-10 text-center text-gray-400">No staff members found.</td></tr>

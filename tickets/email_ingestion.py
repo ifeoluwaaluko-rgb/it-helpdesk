@@ -5,16 +5,13 @@ Saves inline images and file attachments to TicketAttachment.
 """
 import imaplib
 import email
-import os
-import mimetypes
 from email.header import decode_header
-from django.conf import settings
 from django.core.files.base import ContentFile
-from settings_app.models import IntegrationConfig
-from .models import Ticket, TicketAttachment, TicketEvent
+from .models import Ticket, TicketAttachment
 from .classifier import classify
 from .assignment import auto_assign
 from .notifications import notify_ticket_received
+from settings_app.services import get_imap_runtime_config
 
 
 def decode_str(value):
@@ -72,39 +69,19 @@ def get_attachments(msg):
     return attachments
 
 
-
-
-def _get_imap_config():
-    try:
-        cfg = IntegrationConfig.objects.get(integration='email_imap')
-        host = cfg.host or getattr(settings, 'IMAP_HOST', '')
-        port = cfg.port or getattr(settings, 'IMAP_PORT', 993)
-        username = cfg.username or getattr(settings, 'IMAP_USER', '')
-        password = cfg.password or getattr(settings, 'IMAP_PASSWORD', '')
-        folder = getattr(settings, 'IMAP_FOLDER', 'INBOX')
-        return host, port, username, password, folder
-    except Exception:
-        return (
-            getattr(settings, 'IMAP_HOST', ''),
-            getattr(settings, 'IMAP_PORT', 993),
-            getattr(settings, 'IMAP_USER', ''),
-            getattr(settings, 'IMAP_PASSWORD', ''),
-            getattr(settings, 'IMAP_FOLDER', 'INBOX'),
-        )
-
 def fetch_and_create_tickets():
     """
     Connect to IMAP, read unseen emails, create tickets with attachments.
     Returns count of tickets created.
     """
     created = 0
+    imap_config = get_imap_runtime_config()
+    if not imap_config.enabled or not imap_config.is_configured:
+        return created
     try:
-        host, port, username, password, folder = _get_imap_config()
-        if not host or not username or not password:
-            return 0
-        mail = imaplib.IMAP4_SSL(host, port)
-        mail.login(username, password)
-        mail.select(folder)
+        mail = imaplib.IMAP4_SSL(imap_config.host, imap_config.port)
+        mail.login(imap_config.username, imap_config.password)
+        mail.select(imap_config.folder)
 
         _, message_ids = mail.search(None, 'UNSEEN')
 
@@ -130,10 +107,6 @@ def fetch_and_create_tickets():
 
                 body = get_email_body(msg)
                 result = classify(title, body)
-                message_id = (msg.get('Message-ID') or '').strip()
-                if message_id and Ticket.objects.filter(external_message_id=message_id).exists():
-                    mail.store(msg_id, '+FLAGS', '\\Seen')
-                    continue
 
                 ticket = Ticket.objects.create(
                     title=title,
@@ -147,9 +120,7 @@ def fetch_and_create_tickets():
                     sla_hours=result.get('sla_hours', 24),
                     channel='email',
                     raw_email=raw.decode('utf-8', errors='replace'),
-                    external_message_id=message_id,
                 )
-                TicketEvent.objects.create(ticket=ticket, action='created', message='Ticket created from inbound email')
 
                 notify_ticket_received(ticket)
 
@@ -173,7 +144,6 @@ def fetch_and_create_tickets():
                     if assignee:
                         ticket.assigned_to = assignee
                         ticket.save()
-                        TicketEvent.objects.create(ticket=ticket, actor=assignee, action='reassigned', message=f'Auto-assigned to {assignee.get_full_name() or assignee.username}')
                 except Exception:
                     pass
 

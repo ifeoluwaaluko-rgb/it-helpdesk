@@ -1,21 +1,16 @@
 {% extends 'base.html' %}
-{% load ticket_time %}
-{% block title %}Dashboard — IT Helpdesk</div>
-{% endblock %}
+{% block title %}Dashboard - IT Helpdesk{% endblock %}
 {% block breadcrumb %}Dashboard{% endblock %}
 {% block content %}
-<div id="dashboard-live-region">
 
 {% if is_manager %}
-<!-- ══ MANAGER VIEW ══ -->
 <div class="flex items-center justify-between mb-5">
   <div>
     <h1 class="text-lg font-bold text-[#2f3941]">Operations Overview</h1>
-    <p class="text-xs text-[#68737d] mt-0.5">System-wide · Live</p>
+    <p class="text-xs text-[#68737d] mt-0.5">System-wide - Live</p>
   </div>
 </div>
 
-<!-- KPIs -->
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
   {% for val, label, color, bg in kpis %}
   <div class="zd-card p-4">
@@ -25,7 +20,6 @@
   {% endfor %}
 </div>
 
-<!-- Row 2 KPIs -->
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
   <div class="zd-card p-4 flex items-center gap-3">
     <div class="w-9 h-9 rounded bg-green-100 flex items-center justify-center text-green-600 flex-shrink-0">
@@ -37,14 +31,13 @@
     <div class="w-9 h-9 rounded bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
     </div>
-    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_resolution|duration_from_hours }}</p><p class="text-xs text-[#68737d]">Avg Resolution</p></div>
+    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_resolution }}h</p><p class="text-xs text-[#68737d]">Avg Resolution</p></div>
   </div>
-
   <div class="zd-card p-4 flex items-center gap-3">
     <div class="w-9 h-9 rounded bg-cyan-100 flex items-center justify-center text-cyan-700 flex-shrink-0">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
     </div>
-    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_first_response|duration_from_minutes }}</p><p class="text-xs text-[#68737d]">Avg First Response</p></div>
+    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_first_response }}m</p><p class="text-xs text-[#68737d]">Avg First Response</p></div>
   </div>
   <div class="zd-card p-4 flex items-center gap-3">
     <div class="w-9 h-9 rounded {% if stats.unassigned > 0 %}bg-orange-100{% else %}bg-gray-100{% endif %} flex items-center justify-center {% if stats.unassigned > 0 %}text-orange-500{% else %}text-gray-500{% endif %} flex-shrink-0">
@@ -61,12 +54,10 @@
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-  <!-- Chart -->
   <div class="lg:col-span-2 zd-card p-5">
-    <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Ticket Volume — Last 7 Days</h3>
+    <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Ticket Volume - Last 7 Days</h3>
     <canvas id="volumeChart" height="80"></canvas>
   </div>
-  <!-- Category -->
   <div class="zd-card p-5">
     <h3 class="text-sm font-semibold text-[#2f3941] mb-4">By Category</h3>
     <div class="space-y-3">
@@ -79,7 +70,6 @@
     </div>
   </div>
 </div>
-
 
 {% if recurring_issues %}
 <div class="zd-card p-5 mb-4">
@@ -102,7 +92,6 @@
 {% endif %}
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-  <!-- Staff Workload -->
   <div class="zd-card p-5">
     <div class="flex items-center justify-between mb-4">
       <h3 class="text-sm font-semibold text-[#2f3941]">Team Workload</h3>
@@ -116,13 +105,12 @@
             <p class="text-xs text-[#2f3941] font-medium truncate">{{ s.get_full_name|default:s.username }}</p>
             <span class="text-xs font-bold ml-2 {% if s.open_count > 5 %}text-red-500{% elif s.open_count > 2 %}text-orange-500{% else %}text-green-600{% endif %}">{{ s.open_count }}</span>
           </div>
-          <div class="h-1.5 bg-gray-100 rounded-full"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:min({% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%,100%)"></div></div>
+          <div class="h-1.5 bg-gray-100 rounded-full"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:{% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%"></div></div>
         </div>
       </div>
       {% endfor %}
     </div>
   </div>
-  <!-- Avg resolution by cat -->
   <div class="zd-card p-5">
     <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Avg Resolution by Category</h3>
     {% if cat_resolution %}
@@ -140,11 +128,10 @@
 </div>
 
 {% else %}
-<!-- ══ STAFF VIEW ══ -->
 <div class="flex items-center justify-between mb-5">
   <div>
     <h1 class="text-lg font-bold text-[#2f3941]">My Workspace</h1>
-    <p class="text-xs text-[#68737d] mt-0.5">{{ user.get_full_name|default:user.username }} · {{ role_display }}</p>
+    <p class="text-xs text-[#68737d] mt-0.5">{{ user.get_full_name|default:user.username }} · {{ role }}</p>
   </div>
 </div>
 
@@ -163,7 +150,6 @@
 </div>
 {% endif %}
 
-<!-- Unassigned queue (both roles) -->
 {% if unassigned_tickets %}
 <div class="zd-card mb-4 border-orange-200">
   <div class="flex items-center gap-2 px-5 py-3 border-b border-[#d8dcde]">
@@ -194,11 +180,10 @@
 </div>
 {% endif %}
 
-<!-- Recent tickets -->
 <div class="zd-card">
   <div class="flex items-center justify-between px-5 py-3 border-b border-[#d8dcde]">
     <h3 class="text-sm font-semibold text-[#2f3941]">{% if is_manager %}Recent Tickets{% else %}My Open Tickets{% endif %}</h3>
-    <a href="{% url 'ticket_list' %}{% if not is_manager %}?mine=1{% endif %}" class="text-xs text-[#1f73b7] hover:underline">View all →</a>
+    <a href="{% url 'ticket_list' %}{% if not is_manager %}?mine=1{% endif %}" class="text-xs text-[#1f73b7] hover:underline">View all -></a>
   </div>
   <div class="overflow-x-auto">
     <table class="w-full text-sm min-w-[600px]">
@@ -217,10 +202,10 @@
         <td class="px-5 py-3 text-xs text-[#68737d]">{{ t.requester_name|default:t.user_email|truncatechars:20 }}</td>
         <td class="px-5 py-3">{% include 'partials/priority_badge.html' with priority=t.priority %}</td>
         <td class="px-5 py-3">{% include 'partials/status_badge.html' with status=t.status %}</td>
-        <td class="px-5 py-3 text-xs text-[#68737d]">{{ t.assigned_to.get_full_name|default:t.assigned_to.username|default:"—" }}</td>
+        <td class="px-5 py-3 text-xs text-[#68737d]">{{ t.assigned_to.get_full_name|default:t.assigned_to.username|default:"-" }}</td>
       </tr>
       {% empty %}
-      <tr><td colspan="6" class="px-5 py-8 text-center text-[#68737d] text-sm">No tickets. 🎉</td></tr>
+      <tr><td colspan="6" class="px-5 py-8 text-center text-[#68737d] text-sm">No tickets yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>

@@ -3,25 +3,34 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
-from django.utils import timezone
-from django.db.models import Count, Q, Avg
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.db.models import Q
 from django.contrib import messages
-from django.http import JsonResponse, Http404
-from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment, TicketEvent
+from django.http import JsonResponse
+from .models import Ticket, TicketAttachment
+from .forms import (
+    ALLOWED_ATTACHMENT_EXTENSIONS,
+    MAX_ATTACHMENT_SIZE,
+    TicketCategoryUpdateForm,
+    TicketCommentForm,
+    TicketCreateForm,
+    TicketEditForm,
+    TicketReassignForm,
+    TicketStatusForm,
+)
 from .classifier import classify, CATEGORY_TREE
 from .assignment import auto_assign
-from .notifications import notify_assignment, notify_status_change, notify_ticket_received
+from .notifications import notify_assignment, notify_ticket_received
+from .permissions import get_role, can_assign, can_delete_edit, is_helpdesk_staff
+from .services import add_comment, pickup_ticket, reassign_ticket, update_ticket_category, update_ticket_fields, update_ticket_status
+from .analytics import build_dashboard_metrics, build_staff_workload, calculate_agent_productivity
 from knowledge.models import Article
 import json
 import re
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
-
-ALLOWED_ATTACHMENT_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.pdf', '.docx', '.xlsx', '.txt', '.zip'}
-MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10 MB
-
 
 STOP_WORDS = {
     'the', 'and', 'for', 'with', 'from', 'that', 'this', 'have', 'been', 'cannot',
@@ -30,33 +39,6 @@ STOP_WORDS = {
     'ticket', 'please', 'after', 'before', 'does', 'doing', 'done', 'cannot', 'email'
 }
 
-
-def _mark_first_response(ticket):
-    if not ticket.first_response_at:
-        ticket.first_response_at = timezone.now()
-        ticket.save(update_fields=['first_response_at', 'updated_at'])
-
-
-
-
-def _log_ticket_event(ticket, action, actor=None, message=''):
-    try:
-        TicketEvent.objects.create(ticket=ticket, actor=actor, action=action, message=message[:255])
-    except Exception:
-        logger.exception('Ticket event log failed')
-
-def _normalize_chart_day(day_value):
-    if isinstance(day_value, datetime):
-        return day_value.date()
-    if hasattr(day_value, 'date'):
-        return day_value.date()
-    if isinstance(day_value, str):
-        for fmt in ('%Y-%m-%d', '%b %d'):
-            try:
-                return datetime.strptime(day_value, fmt).date()
-            except ValueError:
-                continue
-    return day_value
 
 def _normalize_issue_signature(ticket):
     title = re.sub(r'[^a-z0-9\s]', ' ', (ticket.title or '').lower())
@@ -116,21 +98,6 @@ def _knowledge_suggestions(ticket, limit=3):
     suggestions.sort(key=lambda article: (-article.score, -article.updated_at.timestamp()))
     return suggestions[:limit]
 
-
-
-def get_role(user):
-    try: return user.profile.role
-    except: return 'associate'
-
-
-def can_assign(user):
-    return get_role(user) in ('manager', 'consultant', 'senior')
-
-
-def can_delete_edit(user):
-    return get_role(user) in ('manager', 'consultant', 'senior')
-
-
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
@@ -141,6 +108,12 @@ def login_view(request):
         if user:
             login(request, user)
             next_url = request.POST.get('next') or request.GET.get('next') or '/dashboard/'
+            if not url_has_allowed_host_and_scheme(
+                next_url,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure(),
+            ):
+                next_url = '/dashboard/'
             return redirect(next_url)
         messages.error(request, 'Invalid username or password.')
     return render(request, 'login.html', {'next': request.GET.get('next', '')})
@@ -159,78 +132,24 @@ def dashboard(request):
     is_consultant = role in ('consultant', 'senior')
 
     all_tickets = Ticket.objects.select_related('assigned_to').all()
-    active_statuses = ['open', 'in_progress', 'pending']
-    my_tickets = all_tickets.filter(assigned_to=user).exclude(status__in=['resolved', 'closed'])
-    unassigned = all_tickets.filter(assigned_to__isnull=True, status='open')
-
-    counts = all_tickets.aggregate(
-        total=Count('id'),
-        open=Count('id', filter=Q(status='open')),
-        in_progress=Count('id', filter=Q(status='in_progress')),
-        resolved=Count('id', filter=Q(status='resolved')),
-        unassigned=Count('id', filter=Q(assigned_to__isnull=True, status='open')),
-    )
-    total = counts['total'] or 0
-    open_count = counts['open'] or 0
-    in_progress = counts['in_progress'] or 0
-    resolved_count = counts['resolved'] or 0
-
-    active_tickets = list(all_tickets.filter(status__in=active_statuses))
-    sla_breached_ids = [t.id for t in active_tickets if t.is_sla_breached]
-
-    closed = list(all_tickets.filter(status__in=['resolved', 'closed']))
-    sla_ok = sum(1 for t in closed if t.resolved_at and t.resolved_at <= t.sla_deadline)
-    sla_compliance = round((sla_ok / len(closed)) * 100) if closed else 100
-
-    resolved_tickets = list(all_tickets.filter(resolved_at__isnull=False))
-    times = [t.resolution_time_hours for t in resolved_tickets if t.resolution_time_hours is not None]
-    avg_resolution = round(sum(times) / len(times), 1) if times else 0
-
-    today = date.today()
-    chart_labels = [(today - timedelta(days=i)).strftime('%b %d') for i in range(6, -1, -1)]
-    day_buckets = {today - timedelta(days=i): 0 for i in range(6, -1, -1)}
-    chart_rows = (
-        all_tickets.filter(created_at__date__gte=today - timedelta(days=6))
-        .extra(select={'day': "date(created_at)"})
-        .values('day')
-        .annotate(count=Count('id'))
-        .order_by('day')
-    )
-    for row in chart_rows:
-        day_key = _normalize_chart_day(row['day'])
-        if day_key in day_buckets:
-            day_buckets[day_key] = row['count']
-    chart_data = [day_buckets[today - timedelta(days=i)] for i in range(6, -1, -1)]
-
-    category_counts = list(all_tickets.values('category').annotate(count=Count('id')).order_by('-count'))
-
-    cat_resolution = {}
-    for cat, _ in Ticket.CATEGORY_CHOICES:
-        cat_tickets = [t for t in resolved_tickets if t.category == cat and t.resolution_time_hours is not None]
-        if cat_tickets:
-            cat_resolution[cat] = round(sum(t.resolution_time_hours for t in cat_tickets) / len(cat_tickets), 1)
+    my_tickets = all_tickets.filter(assigned_to=user).exclude(status__in=['resolved','closed'])
+    unassigned = all_tickets.filter(assigned_to__isnull=True, status__in=['open'])
+    metrics = build_dashboard_metrics(all_tickets)
 
     staff_workload = []
     if is_manager:
-        staff = User.objects.filter(is_staff=True).annotate(
-            open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open', 'in_progress']))
-        ).order_by('-open_count')
-        staff_workload = list(staff)
+        staff_workload = build_staff_workload()
 
-    my_resolved = all_tickets.filter(assigned_to=user, status__in=['resolved', 'closed']).count()
-    my_total_assigned = all_tickets.filter(assigned_to=user).count()
-    my_productivity = round((my_resolved / my_total_assigned) * 100) if my_total_assigned > 0 else 0
+    personal_metrics = calculate_agent_productivity(all_tickets, user)
 
     recent = all_tickets[:15] if is_manager else my_tickets[:15]
-    first_response_values = [t.first_response_minutes for t in all_tickets if t.first_response_minutes is not None]
-    avg_first_response = round(sum(first_response_values) / len(first_response_values), 1) if first_response_values else 0
     recurring_issues = _get_recurring_issue_summary() if is_manager else []
 
     kpis = [
-        (open_count, 'Open', 'text-[#1f73b7]', ''),
-        (in_progress, 'In Progress', 'text-[#f79a3e]', ''),
-        (resolved_count, 'Resolved', 'text-green-600', ''),
-        (len(sla_breached_ids), 'SLA Breached', 'text-red-500' if sla_breached_ids else 'text-[#68737d]', ''),
+        (metrics['open'],            'Open',        'text-[#1f73b7]', ''),
+        (metrics['in_progress'],     'In Progress', 'text-[#f79a3e]', ''),
+        (metrics['resolved'],        'Resolved',    'text-green-600', ''),
+        (metrics['sla_breached'], 'SLA Breached', 'text-red-500' if metrics['sla_breached'] else 'text-[#68737d]', ''),
     ]
 
     context = {
@@ -241,26 +160,23 @@ def dashboard(request):
         'is_consultant': is_consultant,
         'role': role,
         'stats': {
-            'total': total,
-            'open': open_count,
-            'in_progress': in_progress,
-            'resolved': resolved_count,
-            'sla_breached': len(sla_breached_ids),
-            'unassigned': counts['unassigned'] or 0,
-            'sla_compliance': sla_compliance,
-            'avg_resolution': avg_resolution,
-            'avg_first_response': avg_first_response,
+            'total': metrics['total'], 'open': metrics['open'], 'in_progress': metrics['in_progress'],
+            'resolved': metrics['resolved'], 'sla_breached': metrics['sla_breached'],
+            'unassigned': unassigned.count(), 'sla_compliance': metrics['sla_compliance'],
+            'avg_resolution': metrics['avg_resolution'],
+            'avg_first_response': metrics['avg_first_response'],
         },
         'kpis': kpis,
-        'sla_breached_ids': sla_breached_ids,
+        'sla_breached_ids': metrics['sla_breached_ids'],
         'staff_workload': staff_workload,
-        'category_counts': category_counts,
-        'avg_resolution': avg_resolution,
-        'chart_labels': json.dumps(chart_labels),
-        'chart_data': json.dumps(chart_data),
-        'cat_resolution': cat_resolution,
-        'my_resolved': my_resolved,
-        'my_productivity': my_productivity,
+        'category_counts': metrics['category_counts'],
+        'avg_resolution': metrics['avg_resolution'],
+        'chart_labels': metrics['chart_labels'],
+        'chart_data': metrics['chart_data'],
+        'cat_resolution': metrics['cat_resolution'],
+        'my_productivity': personal_metrics['productivity'],
+        'my_resolved': personal_metrics['resolved'],
+        'my_total_assigned': personal_metrics['total_assigned'],
         'recurring_issues': recurring_issues,
     }
     return render(request, 'dashboard.html', context)
@@ -301,83 +217,75 @@ def ticket_detail(request, pk):
     comments = ticket.comments.select_related('author').all()
     related_articles = _knowledge_suggestions(ticket)
     role = get_role(request.user)
+    comment_form = TicketCommentForm()
+    status_form = TicketStatusForm(initial={'status': ticket.status})
+    category_form = TicketCategoryUpdateForm(initial={
+        'category': ticket.category,
+        'subcategory': ticket.subcategory,
+        'item': ticket.item,
+    })
+    reassign_form = TicketReassignForm(initial={
+        'user_id': ticket.assigned_to_id or '',
+    })
 
     if request.method == 'POST':
+        if not is_helpdesk_staff(request.user):
+            messages.error(request, 'Only helpdesk staff can update tickets.')
+            return redirect('ticket_detail', pk=pk)
+
         action = request.POST.get('action')
 
         if action == 'comment':
-            body = request.POST.get('body','').strip()
-            if body:
-                TicketComment.objects.create(ticket=ticket, author=request.user, body=body)
-                _mark_first_response(ticket)
-                _log_ticket_event(ticket, 'commented', request.user, 'Internal note added')
-                messages.success(request, 'Note added.')
+            comment_form = TicketCommentForm(request.POST)
+            if comment_form.is_valid():
+                add_comment(ticket, request.user, comment_form.cleaned_data['body'])
+            else:
+                for errors in comment_form.errors.values():
+                    for error in errors:
+                        messages.error(request, error)
 
         elif action == 'pickup' and not ticket.assigned_to:
-            ticket.assigned_to = request.user
-            ticket.status = 'in_progress'
-            ticket.save()
-            _mark_first_response(ticket)
-            notify_assignment(ticket, request.user)
-            _log_ticket_event(ticket, 'picked_up', request.user, f'Picked up by {request.user.get_full_name() or request.user.username}')
-            messages.success(request, f'You picked up ticket #{ticket.id}.')
+            result = pickup_ticket(ticket, request.user)
+            if result.message:
+                messages.success(request, result.message)
 
         elif action == 'update_status':
-            new_status = request.POST.get('status', '').strip()
-            valid_statuses = [s for s, _ in Ticket.STATUS_CHOICES]
-            if new_status and new_status in valid_statuses:
-                old_status = ticket.status
-                ticket.status = new_status
-                if new_status == 'resolved' and not ticket.resolved_at:
-                    ticket.resolved_at = timezone.now()
-                ticket.save()
-                if new_status in ['in_progress', 'pending', 'resolved', 'closed']:
-                    _mark_first_response(ticket)
-                if new_status != old_status:
-                    notify_status_change(ticket, request.user)
-                    message = f'Status changed from {old_status} to {new_status}'
-                    if new_status == 'resolved':
-                        message = f'Resolved by {request.user.get_full_name() or request.user.username}'
-                    _log_ticket_event(ticket, 'status_changed', request.user, message)
-                    messages.success(request, 'Ticket status updated.')
+            status_form = TicketStatusForm(request.POST)
+            if status_form.is_valid():
+                update_ticket_status(ticket, request.user, status_form.cleaned_data['status'])
+            else:
+                for errors in status_form.errors.values():
+                    for error in errors:
+                        messages.error(request, error)
 
         elif action == 'reassign' and can_assign(request.user):
-            uid = request.POST.get('user_id', '').strip()
-            if uid:
+            reassign_form = TicketReassignForm(request.POST)
+            if reassign_form.is_valid():
                 try:
-                    old = ticket.assigned_to
-                    ticket.assigned_to_id = int(uid)
-                    ticket.save()
-                    ticket.refresh_from_db()
-                    if ticket.assigned_to and (not old or old.id != ticket.assigned_to.id):
-                        notify_assignment(ticket, ticket.assigned_to)
-                        _mark_first_response(ticket)
-                        if old:
-                            _log_ticket_event(ticket, 'reassigned', request.user, f'Reassigned from {old.get_full_name() or old.username} to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}')
-                            messages.success(request, f'Ticket reassigned from {old.get_full_name() or old.username} to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}.')
-                        else:
-                            _log_ticket_event(ticket, 'reassigned', request.user, f'Assigned to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}')
-                            messages.success(request, f'Ticket assigned to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}.')
-                    else:
-                        messages.info(request, 'Ticket assignee is unchanged.')
+                    reassign_ticket(ticket, reassign_form.cleaned_data['user_id'])
                 except (ValueError, User.DoesNotExist):
                     messages.error(request, 'Invalid staff selection.')
+            else:
+                for errors in reassign_form.errors.values():
+                    for error in errors:
+                        messages.error(request, error)
 
         elif action == 'update_category':
-            # Save snapshot before changing
-            TicketEditHistory.objects.create(
-                ticket=ticket, edited_by=request.user,
-                title=ticket.title, description=ticket.description,
-                category=ticket.category, subcategory=ticket.subcategory,
-                item=ticket.item, priority=ticket.priority, status=ticket.status,
-                edit_note='Category updated',
-            )
-            ticket.category = request.POST.get('category', ticket.category)
-            ticket.subcategory = request.POST.get('subcategory', '')
-            ticket.item = request.POST.get('item', '')
-            ticket.save()
-            _log_ticket_event(ticket, 'category_updated', request.user, f'Category updated to {ticket.category_display}')
-            messages.success(request, 'Category updated.')
+            category_form = TicketCategoryUpdateForm(request.POST)
+            if category_form.is_valid():
+                result = update_ticket_category(
+                    ticket,
+                    request.user,
+                    category_form.cleaned_data['category'],
+                    category_form.cleaned_data['subcategory'],
+                    category_form.cleaned_data['item'],
+                )
+                if result.message:
+                    messages.success(request, result.message)
+            else:
+                for errors in category_form.errors.values():
+                    for error in errors:
+                        messages.error(request, error)
 
         return redirect('ticket_detail', pk=pk)
 
@@ -385,7 +293,6 @@ def ticket_detail(request, pk):
 
     return render(request, 'ticket_detail.html', {
         'ticket': ticket,
-        'activity_events': ticket.events.select_related('actor').all()[:12],
         'comments': comments,
         'related_articles': related_articles,
         'staff_users': staff_users,
@@ -393,60 +300,66 @@ def ticket_detail(request, pk):
         'category_choices': Ticket.CATEGORY_CHOICES,
         'category_tree_json': json.dumps(CATEGORY_TREE),
         'can_assign': can_assign(request.user),
-        'can_edit': True,  # all staff can edit
+        'can_edit': is_helpdesk_staff(request.user),
         'can_delete': can_delete_edit(request.user),
         'role': role,
+        'comment_form': comment_form,
+        'status_form': status_form,
+        'category_form': category_form,
+        'reassign_form': reassign_form,
     })
 
 
 @login_required
 def ticket_edit(request, pk):
     ticket = get_object_or_404(Ticket, pk=pk)
-    role = get_role(request.user)
+    can_edit_status = can_delete_edit(request.user)
+
+    if not is_helpdesk_staff(request.user):
+        messages.error(request, 'Only helpdesk staff can edit tickets.')
+        return redirect('ticket_detail', pk=pk)
+
+    initial = {
+        'title': ticket.title,
+        'description': ticket.description,
+        'category': ticket.category,
+        'subcategory': ticket.subcategory,
+        'item': ticket.item,
+        'priority': ticket.priority,
+        'status': ticket.status,
+        'tags': ticket.tags,
+        'edit_note': '',
+    }
+    form = TicketEditForm(
+        request.POST or None,
+        ticket=ticket,
+        can_edit_status=can_edit_status,
+        initial=initial,
+    )
 
     if request.method == 'POST':
-        try:
-            edit_note = request.POST.get('edit_note', '').strip()
-            TicketEditHistory.objects.create(
-                ticket=ticket, edited_by=request.user,
-                title=ticket.title, description=ticket.description,
-                category=ticket.category, subcategory=ticket.subcategory,
-                item=ticket.item, priority=ticket.priority, status=ticket.status,
-                edit_note=edit_note or 'Edited',
-            )
-            valid_priorities = [p for p, _ in Ticket.PRIORITY_CHOICES]
-            valid_statuses   = [s for s, _ in Ticket.STATUS_CHOICES]
-            valid_categories = [c for c, _ in Ticket.CATEGORY_CHOICES]
-            new_title = request.POST.get('title', ticket.title).strip()
-            new_desc  = request.POST.get('description', ticket.description).strip()
-            new_cat   = request.POST.get('category', ticket.category)
-            new_pri   = request.POST.get('priority', ticket.priority)
-            ticket.title       = new_title or ticket.title
-            ticket.description = new_desc  or ticket.description
-            ticket.category    = new_cat if new_cat in valid_categories else ticket.category
-            ticket.subcategory = request.POST.get('subcategory', '')
-            ticket.item        = request.POST.get('item', '')
-            ticket.priority    = new_pri if new_pri in valid_priorities else ticket.priority
-            ticket.tags        = request.POST.get('tags', ticket.tags)
-            if can_delete_edit(request.user):
-                new_status = request.POST.get('status', ticket.status)
-                ticket.status = new_status if new_status in valid_statuses else ticket.status
-                if ticket.status == 'resolved' and not ticket.resolved_at:
-                    ticket.resolved_at = timezone.now()
-            ticket.save()
-            messages.success(request, f'Ticket #{ticket.id} updated.')
-            return redirect('ticket_detail', pk=pk)
-        except Exception as e:
-            logger.exception('ticket_edit failed for ticket_id=%s user_id=%s', pk, request.user.id)
-            messages.error(request, f'Could not save changes: {e}')
+        if form.is_valid():
+            try:
+                result = update_ticket_fields(ticket, request.user, form.cleaned_data, can_edit_status)
+                if result.message:
+                    messages.success(request, result.message)
+                return redirect('ticket_detail', pk=pk)
+            except Exception as e:
+                logger.exception('ticket_edit failed for ticket_id=%s user_id=%s', pk, request.user.id)
+                messages.error(request, f'Could not save changes: {e}')
+        else:
+            for errors in form.errors.values():
+                for error in errors:
+                    messages.error(request, error)
 
     return render(request, 'ticket_edit.html', {
         'ticket': ticket,
+        'form': form,
         'category_choices': Ticket.CATEGORY_CHOICES,
         'priority_choices': Ticket.PRIORITY_CHOICES,
         'status_choices': Ticket.STATUS_CHOICES,
         'category_tree_json': json.dumps(CATEGORY_TREE),
-        'can_edit_status': can_delete_edit(request.user),
+        'can_edit_status': can_edit_status,
     })
 
 
@@ -473,21 +386,15 @@ def ticket_delete(request, pk):
 @login_required
 def create_ticket(request):
     from directory.models import StaffMember
+    form = TicketCreateForm(request.POST or None, request.FILES or None)
     if request.method == 'POST':
-        title = request.POST.get('title', '').strip()
-        description = request.POST.get('description', '').strip()
-        user_email = request.POST.get('user_email', '').strip()
-        channel = request.POST.get('channel', 'manual')
-        staff_id = request.POST.get('staff_member', '').strip()
-        attachment = request.FILES.get('attachment')
-
-        valid_channels = [c for c, _ in Ticket.CHANNEL_CHOICES]
-        if channel not in valid_channels:
-            channel = 'manual'
-
-        if not (title and description and user_email):
-            messages.error(request, 'Please fill in all required fields.')
-        else:
+        if form.is_valid():
+            title = form.cleaned_data['title']
+            description = form.cleaned_data['description']
+            user_email = form.cleaned_data['user_email']
+            channel = form.cleaned_data['channel']
+            staff_id = form.cleaned_data.get('staff_member')
+            attachment = form.cleaned_data.get('attachment')
             try:
                 result = classify(title, description)
                 ticket = Ticket.objects.create(
@@ -509,21 +416,14 @@ def create_ticket(request):
                         pass
 
                 if attachment:
-                    ext = os.path.splitext(attachment.name)[1].lower()
-                    if attachment.size > MAX_ATTACHMENT_SIZE:
-                        messages.warning(request, 'Attachment was skipped because it exceeded the 10 MB limit.')
-                    elif ext not in ALLOWED_ATTACHMENT_EXTENSIONS:
-                        messages.warning(request, 'Attachment type is not allowed and was skipped.')
-                    else:
-                        TicketAttachment.objects.create(
-                            ticket=ticket,
-                            file=attachment,
-                            filename=attachment.name,
-                            content_type=getattr(attachment, 'content_type', '') or '',
-                            source='manual',
-                        )
+                    TicketAttachment.objects.create(
+                        ticket=ticket,
+                        file=attachment,
+                        filename=attachment.name,
+                        content_type=getattr(attachment, 'content_type', '') or '',
+                        source='manual',
+                    )
 
-                _log_ticket_event(ticket, 'created', request.user, 'Ticket created manually')
                 notify_ticket_received(ticket)
 
                 try:
@@ -532,7 +432,6 @@ def create_ticket(request):
                         ticket.assigned_to = assignee
                         ticket.save()
                         notify_assignment(ticket, assignee)
-                        _log_ticket_event(ticket, 'reassigned', assignee, f'Auto-assigned to {assignee.get_full_name() or assignee.username}')
                 except Exception:
                     pass
                 messages.success(request, f'Ticket #{ticket.id} created.')
@@ -540,6 +439,10 @@ def create_ticket(request):
             except Exception as e:
                 logger.exception('Ticket create failed')
                 messages.error(request, f'Could not create ticket: {e}')
+        else:
+            for errors in form.errors.values():
+                for error in errors:
+                    messages.error(request, error)
 
     staff_members = []
     try:
@@ -548,6 +451,7 @@ def create_ticket(request):
         pass
 
     return render(request, 'create_ticket.html', {
+        'form': form,
         'staff_members': staff_members,
         'channel_choices': Ticket.CHANNEL_CHOICES,
         'allowed_attachment_types': ', '.join(sorted(ALLOWED_ATTACHMENT_EXTENSIONS)),
@@ -558,31 +462,22 @@ def create_ticket(request):
 @login_required
 def live_dashboard(request):
     all_tickets = Ticket.objects.all()
-    open_t = all_tickets.filter(status='open').count()
-    in_progress_t = all_tickets.filter(status='in_progress').count()
-    resolved_t = all_tickets.filter(status='resolved').count()
-    total = all_tickets.count()
-    closed = list(all_tickets.filter(status__in=['resolved', 'closed']))
-    sla_ok = sum(1 for t in closed if t.resolved_at and t.resolved_at <= t.sla_deadline)
-    sla_compliance = round((sla_ok/len(closed))*100) if closed else 100
-    times = [t.resolution_time_hours for t in all_tickets.filter(resolved_at__isnull=False) if t.resolution_time_hours]
-    avg_resolution = round(sum(times)/len(times),1) if times else 0
+    metrics = build_dashboard_metrics(all_tickets)
+    agents = build_staff_workload()
     total_assigned = all_tickets.exclude(assigned_to__isnull=True).count()
-    productivity = round((resolved_t/total_assigned)*100) if total_assigned > 0 else 0
-    sla_breached = sum(1 for t in all_tickets.filter(status__in=['open','in_progress']) if t.is_sla_breached)
-    agents = User.objects.filter(is_staff=True).annotate(
-        open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open','in_progress']))
-    )
+    productivity = round((metrics['resolved'] / total_assigned) * 100) if total_assigned > 0 else 0
     return render(request, 'live_dashboard.html', {
-        'open':open_t,'in_progress':in_progress_t,'resolved':resolved_t,
-        'total':total,'sla_compliance':sla_compliance,'avg_resolution':avg_resolution,
-        'productivity':productivity,'sla_breached':sla_breached,'agents':agents,
+        'open':metrics['open'],'in_progress':metrics['in_progress'],'resolved':metrics['resolved'],
+        'total':metrics['total'],'sla_compliance':metrics['sla_compliance'],'avg_resolution':metrics['avg_resolution'],
+        'productivity':productivity,'sla_breached':metrics['sla_breached'],'agents':agents,
     })
 
 
 @login_required
 def staff_search_api(request):
     from directory.models import StaffMember
+    if not is_helpdesk_staff(request.user):
+        return JsonResponse({'results': []}, status=403)
     q = request.GET.get('q','').strip()
     if len(q) < 2: return JsonResponse({'results':[]})
     members = StaffMember.objects.filter(
