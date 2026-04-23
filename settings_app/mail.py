@@ -33,14 +33,14 @@ def get_outbound_mail_config() -> OutboundMailConfig:
     if cfg and cfg.is_active and cfg.is_configured():
         host = cfg.host or getattr(settings, 'EMAIL_HOST', '')
         port = int(cfg.port or 0)
-        use_ssl = port == 465
+        use_ssl = bool(cfg.use_ssl or port == 465)
         return OutboundMailConfig(
             enabled=True,
             host=host,
             port=port,
             username=cfg.username or getattr(settings, 'EMAIL_HOST_USER', ''),
             password=cfg.password or getattr(settings, 'EMAIL_HOST_PASSWORD', ''),
-            use_tls=bool(cfg.use_tls and port != 465),
+            use_tls=bool(cfg.use_tls and not use_ssl),
             use_ssl=use_ssl,
             from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', '') or (cfg.username or ''),
         )

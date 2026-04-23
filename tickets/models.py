@@ -212,6 +212,10 @@ class TicketEvent(models.Model):
     def __str__(self):
         return f"{self.ticket_id}:{self.event_type}@{self.created_at}"
 
+    @property
+    def action_display(self):
+        return self.get_event_type_display()
+
 class CannedResponse(models.Model):
     title = models.CharField(max_length=200)
     body = models.TextField()

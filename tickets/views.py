@@ -8,7 +8,7 @@ from django.db.models import Count, Q
 from django.contrib import messages
 from django.conf import settings
 from django.http import JsonResponse, Http404, FileResponse
-from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment
+from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment, TicketEvent
 from .classifier import classify, CATEGORY_TREE
 from .assignment import auto_assign
 from .notifications import notify_assignment, notify_status_change, notify_ticket_received
@@ -43,66 +43,18 @@ def _mark_first_response(ticket):
 
 
 def _log_status_event(ticket, actor, action, from_status='', to_status='', note=''):
-    TicketEditHistory.objects.create(
+    TicketEvent.objects.create(
         ticket=ticket,
-        edited_by=actor,
-        title=ticket.title,
-        description=ticket.description,
-        category=ticket.category,
-        subcategory=ticket.subcategory,
-        item=ticket.item,
-        priority=ticket.priority,
-        status=from_status or ticket.status,
-        edit_note=f"EVENT::{action}||{from_status or ''}||{to_status or ''}||{(note or '')[:180]}",
+        actor=actor,
+        event_type=action,
+        from_status=from_status or '',
+        to_status=to_status or ticket.status,
+        note=(note or '')[:255],
     )
 
 
 def _get_status_events(ticket):
-    label_map = {
-        'created': 'Created',
-        'picked_up': 'Picked Up',
-        'assigned': 'Assigned',
-        'reassigned': 'Reassigned',
-        'status_changed': 'Status Changed',
-        'resolved': 'Resolved',
-        'closed': 'Closed',
-        'reopened': 'Reopened',
-    }
-    events = [
-        SimpleNamespace(
-            action='created',
-            action_display='Created',
-            created_at=ticket.created_at,
-            actor=None,
-            from_status='',
-            to_status=ticket.status,
-            note='Ticket created',
-        )
-    ]
-
-    for history in ticket.edit_history.select_related('edited_by').all():
-        note = history.edit_note or ''
-        if not note.startswith('EVENT::'):
-            continue
-        payload = note[len('EVENT::'):]
-        parts = payload.split('||', 3)
-        while len(parts) < 4:
-            parts.append('')
-        action, from_status, to_status, extra_note = parts
-        events.append(
-            SimpleNamespace(
-                action=action,
-                action_display=label_map.get(action, action.replace('_', ' ').title()),
-                created_at=history.edited_at,
-                actor=history.edited_by,
-                from_status=from_status,
-                to_status=to_status,
-                note=extra_note,
-            )
-        )
-
-    events.sort(key=lambda e: e.created_at, reverse=True)
-    return events[:12]
+    return list(ticket.events.select_related('actor').all()[:12])
 
 
 def _normalize_issue_signature(ticket):
@@ -166,8 +118,10 @@ def _knowledge_suggestions(ticket, limit=3):
 
 
 def get_role(user):
-    try: return user.profile.role
-    except: return 'associate'
+    try:
+        return user.profile.role
+    except AttributeError:
+        return 'associate'
 
 
 def can_assign(user):
@@ -227,12 +181,17 @@ def dashboard(request):
 
     today = date.today()
     chart_labels, chart_data = [], []
+    daily_counts = {
+        row['day'].date(): row['count']
+        for row in all_tickets.extra(select={'day': "date(created_at)"}).values('day').annotate(count=Count('id'))
+        if row.get('day')
+    }
     for i in range(6, -1, -1):
         day = today - timedelta(days=i)
         chart_labels.append(day.strftime('%b %d'))
-        chart_data.append(all_tickets.filter(created_at__date=day).count())
+        chart_data.append(daily_counts.get(day, 0))
 
-    category_counts = all_tickets.values('category').annotate(count=Count('id')).order_by('-count')
+    category_counts = list(all_tickets.values('category').annotate(count=Count('id')).order_by('-count'))
 
     cat_resolution = {}
     for cat, _ in Ticket.CATEGORY_CHOICES:
@@ -245,7 +204,7 @@ def dashboard(request):
     staff_workload = []
     if is_manager:
         staff = User.objects.filter(is_staff=True).annotate(
-            open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open','in_progress']))
+            open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open','in_progress','pending']))
         ).order_by('-open_count')
         staff_workload = list(staff)
 
@@ -339,6 +298,7 @@ def ticket_detail(request, pk):
             if body:
                 TicketComment.objects.create(ticket=ticket, author=request.user, body=body)
                 _mark_first_response(ticket)
+                _log_status_event(ticket, request.user, 'commented', from_status=ticket.status, to_status=ticket.status, note='Internal comment added.')
 
         elif action == 'pickup' and not ticket.assigned_to:
             previous_status = ticket.status
@@ -393,19 +353,16 @@ def ticket_detail(request, pk):
 
                     _log_status_event(ticket, request.user, action_name, from_status=old_status, to_status=new_status, note=note)
 
-                    try:
-                        notify_status_change(ticket, request.user)
-                    except Exception:
-                        logger.exception('Failed to send status change notification for ticket %s', ticket.id)
+                    notify_status_change(ticket, request.user)
                     messages.success(
                         request,
                         f'Ticket #{ticket.id} status updated from {dict(Ticket.STATUS_CHOICES).get(old_status, old_status)} to {ticket.get_status_display()}.'
                     )
                 else:
                     messages.info(request, f'Ticket #{ticket.id} is already marked as {ticket.get_status_display()}.')
-            except Exception:
+            except (ValueError, TypeError, OSError) as exc:
                 logger.exception('Failed to update status for ticket %s', ticket.id)
-                messages.error(request, 'We could not update the ticket status. Please try again.')
+                messages.error(request, f'We could not update the ticket status: {exc}')
 
         elif action == 'reassign' and can_assign(request.user):
             uid = request.POST.get('user_id', '').strip()
@@ -447,6 +404,7 @@ def ticket_detail(request, pk):
             ticket.subcategory = request.POST.get('subcategory', '')
             ticket.item = request.POST.get('item', '')
             ticket.save()
+            _log_status_event(ticket, request.user, 'category_updated', from_status=ticket.status, to_status=ticket.status, note='Category, subcategory or item updated.')
             messages.success(request, 'Category updated.')
 
         return redirect('ticket_detail', pk=pk)
@@ -507,6 +465,7 @@ def ticket_edit(request, pk):
                 if ticket.status == 'resolved' and not ticket.resolved_at:
                     ticket.resolved_at = timezone.now()
             ticket.save()
+            _log_status_event(ticket, request.user, 'status_changed', from_status=ticket.status, to_status=ticket.status, note=edit_note or 'Ticket edited from edit screen.')
             messages.success(request, f'Ticket #{ticket.id} updated.')
             return redirect('ticket_detail', pk=pk)
         except Exception as e:
@@ -596,27 +555,29 @@ def create_ticket(request):
                             source='manual',
                         )
 
+                _log_status_event(ticket, request.user, 'created', from_status='', to_status=ticket.status, note='Ticket created from web form.')
                 notify_ticket_received(ticket)
 
                 try:
                     assignee = auto_assign(ticket)
                     if assignee:
                         ticket.assigned_to = assignee
-                        ticket.save()
+                        ticket.save(update_fields=['assigned_to'])
+                        _log_status_event(ticket, request.user, 'assigned', from_status=ticket.status, to_status=ticket.status, note=f'Assigned to {assignee.get_full_name() or assignee.username}.')
                         notify_assignment(ticket, assignee)
-                except Exception:
-                    pass
+                except (ValueError, TypeError) as exc:
+                    logger.warning('Auto-assign skipped for ticket %s: %s', ticket.id, exc)
                 messages.success(request, f'Ticket #{ticket.id} created.')
                 return redirect('ticket_detail', pk=ticket.id)
-            except Exception as e:
+            except (ValueError, TypeError, OSError) as e:
                 logger.exception('Ticket create failed')
                 messages.error(request, f'Could not create ticket: {e}')
 
     staff_members = []
     try:
         staff_members = StaffMember.objects.filter(is_active=True).order_by('first_name')
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning('Staff member lookup failed: %s', exc)
 
     return render(request, 'create_ticket.html', {
         'staff_members': staff_members,
@@ -642,7 +603,7 @@ def live_dashboard(request):
     productivity = round((resolved_t/total_assigned)*100) if total_assigned > 0 else 0
     sla_breached = sum(1 for t in all_tickets.filter(status__in=['open','in_progress']) if t.is_sla_breached)
     agents = User.objects.filter(is_staff=True).annotate(
-        open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open','in_progress']))
+        open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open','in_progress','pending']))
     )
     return render(request, 'live_dashboard.html', {
         'open':open_t,'in_progress':in_progress_t,'resolved':resolved_t,

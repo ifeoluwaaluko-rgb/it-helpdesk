@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
 {% block title %}Dashboard — IT Helpdesk{% endblock %}
 {% block breadcrumb %}Dashboard{% endblock %}
-{% block content %}
 
+{% block content %}
+<div id="dashboard-live-region">
 {% if is_manager %}
-<!-- ══ MANAGER VIEW ══ -->
 <div class="flex items-center justify-between mb-5">
   <div>
     <h1 class="text-lg font-bold text-[#2f3941]">Operations Overview</h1>
@@ -12,7 +12,6 @@
   </div>
 </div>
 
-<!-- KPIs -->
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
   {% for val, label, color, bg in kpis %}
   <div class="zd-card p-4">
@@ -22,48 +21,37 @@
   {% endfor %}
 </div>
 
-<!-- Row 2 KPIs -->
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
   <div class="zd-card p-4 flex items-center gap-3">
-    <div class="w-9 h-9 rounded bg-green-100 flex items-center justify-center text-green-600 flex-shrink-0">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-    </div>
+    <div class="w-9 h-9 rounded bg-green-100 flex items-center justify-center text-green-600 flex-shrink-0">✓</div>
     <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.sla_compliance }}%</p><p class="text-xs text-[#68737d]">SLA Compliance</p></div>
   </div>
   <div class="zd-card p-4 flex items-center gap-3">
-    <div class="w-9 h-9 rounded bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-    </div>
+    <div class="w-9 h-9 rounded bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">⏱</div>
     <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_resolution }}h</p><p class="text-xs text-[#68737d]">Avg Resolution</p></div>
   </div>
   <div class="zd-card p-4 flex items-center gap-3">
-    <div class="w-9 h-9 rounded {% if stats.unassigned > 0 %}bg-orange-100{% else %}bg-gray-100{% endif %} flex items-center justify-center {% if stats.unassigned > 0 %}text-orange-500{% else %}text-gray-500{% endif %} flex-shrink-0">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
-    </div>
+    <div class="w-9 h-9 rounded {% if stats.unassigned > 0 %}bg-orange-100{% else %}bg-gray-100{% endif %} flex items-center justify-center {% if stats.unassigned > 0 %}text-orange-500{% else %}text-gray-500{% endif %} flex-shrink-0">📥</div>
     <div><p class="text-lg font-bold {% if stats.unassigned > 0 %}text-orange-500{% else %}text-[#2f3941]{% endif %}">{{ stats.unassigned }}</p><p class="text-xs text-[#68737d]">Unassigned</p></div>
   </div>
   <div class="zd-card p-4 flex items-center gap-3">
-    <div class="w-9 h-9 rounded bg-purple-100 flex items-center justify-center text-purple-600 flex-shrink-0">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
-    </div>
+    <div class="w-9 h-9 rounded bg-purple-100 flex items-center justify-center text-purple-600 flex-shrink-0">#</div>
     <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.total }}</p><p class="text-xs text-[#68737d]">Total Tickets</p></div>
   </div>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-  <!-- Chart -->
   <div class="lg:col-span-2 zd-card p-5">
     <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Ticket Volume — Last 7 Days</h3>
     <canvas id="volumeChart" height="80"></canvas>
   </div>
-  <!-- Category -->
   <div class="zd-card p-5">
     <h3 class="text-sm font-semibold text-[#2f3941] mb-4">By Category</h3>
     <div class="space-y-3">
       {% for item in category_counts %}
       <div>
         <div class="flex justify-between text-xs mb-1"><span class="text-[#68737d] capitalize">{{ item.category }}</span><span class="font-semibold text-[#2f3941]">{{ item.count }}</span></div>
-        <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-[#1f73b7] rounded-full" style="width:{% if stats.total %}{% widthratio item.count stats.total 100 %}{% else %}0{% endif %}%"></div></div>
+        <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-[#1f73b7] rounded-full" style="width:{% if stats.total %}{% widthratio item.count stats.total 100 %}{% else %}0{% endif %}%; max-width:100%;"></div></div>
       </div>
       {% endfor %}
     </div>
@@ -71,11 +59,8 @@
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-  <!-- Staff Workload -->
   <div class="zd-card p-5">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-sm font-semibold text-[#2f3941]">Team Workload</h3>
-    </div>
+    <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Team Workload</h3>
     <div class="space-y-3">
       {% for s in staff_workload %}
       <div class="flex items-center gap-3">
@@ -85,13 +70,14 @@
             <p class="text-xs text-[#2f3941] font-medium truncate">{{ s.get_full_name|default:s.username }}</p>
             <span class="text-xs font-bold ml-2 {% if s.open_count > 5 %}text-red-500{% elif s.open_count > 2 %}text-orange-500{% else %}text-green-600{% endif %}">{{ s.open_count }}</span>
           </div>
-          <div class="h-1.5 bg-gray-100 rounded-full"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:{% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%"></div></div>
+          <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:{% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%; max-width:100%;"></div></div>
         </div>
       </div>
+      {% empty %}
+      <p class="text-xs text-[#68737d]">No staff workload data yet.</p>
       {% endfor %}
     </div>
   </div>
-  <!-- Avg resolution by cat -->
   <div class="zd-card p-5">
     <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Avg Resolution by Category</h3>
     {% if cat_resolution %}
@@ -112,8 +98,24 @@
   </div>
 </div>
 
+{% if recurring_issues %}
+<div class="zd-card mb-4 p-5">
+  <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Recurring Issues (Last 7 Days)</h3>
+  <div class="space-y-2">
+    {% for issue in recurring_issues %}
+    <div class="flex items-center justify-between gap-3 text-sm">
+      <div>
+        <span class="font-medium text-[#2f3941]">{{ issue.label }}</span>
+        <span class="text-[#68737d]">· {{ issue.category }}</span>
+      </div>
+      <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">{{ issue.count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {% else %}
-<!-- ══ STAFF VIEW ══ -->
 <div class="flex items-center justify-between mb-5">
   <div>
     <h1 class="text-lg font-bold text-[#2f3941]">My Workspace</h1>
@@ -136,11 +138,9 @@
 </div>
 {% endif %}
 
-<!-- Unassigned queue (both roles) -->
 {% if unassigned_tickets %}
 <div class="zd-card mb-4 border-orange-200">
   <div class="flex items-center gap-2 px-5 py-3 border-b border-[#d8dcde]">
-    <svg class="w-4 h-4 text-orange-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
     <h3 class="text-sm font-semibold text-[#2f3941]">Unassigned Tickets</h3>
     <span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">{{ stats.unassigned }}</span>
   </div>
@@ -167,7 +167,6 @@
 </div>
 {% endif %}
 
-<!-- Recent tickets -->
 <div class="zd-card">
   <div class="flex items-center justify-between px-5 py-3 border-b border-[#d8dcde]">
     <h3 class="text-sm font-semibold text-[#2f3941]">{% if is_manager %}Recent Tickets{% else %}My Open Tickets{% endif %}</h3>
@@ -201,14 +200,62 @@
     </table>
   </div>
 </div>
+</div>
+{% endblock %}
 
+{% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-const ctx = document.getElementById('volumeChart');
-if(ctx) new Chart(ctx, {
-  type:'bar',
-  data:{labels:{{ chart_labels|safe }},datasets:[{label:'Tickets',data:{{ chart_data|safe }},backgroundColor:'rgba(31,115,183,0.85)',borderRadius:4,borderSkipped:false}]},
-  options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1},grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}
-});
+(function () {
+  function initVolumeChart() {
+    const canvas = document.getElementById('volumeChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    if (window.dashboardVolumeChart) {
+      window.dashboardVolumeChart.destroy();
+    }
+    window.dashboardVolumeChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: {{ chart_labels|safe }},
+        datasets: [{
+          label: 'Tickets',
+          data: {{ chart_data|safe }},
+          backgroundColor: 'rgba(31,115,183,0.85)',
+          borderRadius: 4,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  async function refreshDashboardRegion() {
+    const region = document.getElementById('dashboard-live-region');
+    if (!region) return;
+    try {
+      const res = await fetch(window.location.pathname, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+      if (!res.ok) return;
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const next = doc.getElementById('dashboard-live-region');
+      if (!next) return;
+      region.innerHTML = next.innerHTML;
+      if (window.applyLocalTimes) window.applyLocalTimes(document);
+      initVolumeChart();
+    } catch (err) {
+      console.debug('dashboard refresh skipped', err);
+    }
+  }
+
+  initVolumeChart();
+  setInterval(refreshDashboardRegion, 5000);
+})();
 </script>
 {% endblock %}

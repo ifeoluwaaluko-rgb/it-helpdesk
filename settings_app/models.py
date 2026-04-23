@@ -165,15 +165,19 @@ class IntegrationConfig(models.Model):
         verbose_name_plural = 'Integration Configs'
 
 
+    @property
     def masked_password(self):
         return '●●●●●●' if self._password else 'Not set'
 
+    @property
     def masked_token(self):
         return '●●●●●●' if self._access_token else 'Not set'
 
+    @property
     def masked_oauth_client_secret(self):
         return '●●●●●●' if self._oauth_client_secret else 'Not set'
 
+    @property
     def masked_oauth_refresh_token(self):
         return '●●●●●●' if self._oauth_refresh_token else 'Not set'
 
