@@ -183,6 +183,7 @@ for title, description, email, category, priority, level, sla_hours, status in t
         sla_hours=sla_hours,
         status=status,
         assigned_to=assignee,
+        external_message_id="",
         resolved_at=resolved_at,
     )
     Ticket.objects.filter(pk=ticket.pk).update(

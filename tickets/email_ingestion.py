@@ -107,6 +107,7 @@ def fetch_and_create_tickets():
 
                 body = get_email_body(msg)
                 result = classify(title, body)
+                external_message_id = decode_str(msg.get("Message-ID", "")).strip()
 
                 ticket = Ticket.objects.create(
                     title=title,
@@ -119,6 +120,7 @@ def fetch_and_create_tickets():
                     required_level=result.get('level', 'associate'),
                     sla_hours=result.get('sla_hours', 24),
                     channel='email',
+                    external_message_id=external_message_id,
                     raw_email=raw.decode('utf-8', errors='replace'),
                 )
 

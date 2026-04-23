@@ -406,6 +406,7 @@ def create_ticket(request):
                     required_level=result.get('level', 'associate'),
                     sla_hours=result.get('sla_hours', 24),
                     channel=channel,
+                    external_message_id='',
                 )
                 if staff_id:
                     try:
