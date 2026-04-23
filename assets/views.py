@@ -39,25 +39,16 @@ def asset_detail(request, pk):
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'assign':
-            sid = request.POST.get('staff_id', '').strip()
+            sid = request.POST.get('staff_id')
             old = asset.assigned_to.full_name if asset.assigned_to else 'Unassigned'
-            try:
-                asset.assigned_to = StaffMember.objects.get(pk=int(sid)) if sid else None
-            except (StaffMember.DoesNotExist, ValueError):
-                messages.error(request, 'Selected staff member not found.')
-                return redirect('asset_detail', pk=pk)
+            asset.assigned_to = StaffMember.objects.get(pk=sid) if sid else None
             new = asset.assigned_to.full_name if asset.assigned_to else 'Unassigned'
             asset.save()
             AssetHistory.objects.create(asset=asset,changed_by=request.user,change_type='Reassigned',old_value=old,new_value=new)
             messages.success(request,'Assignment updated.')
         elif action == 'status':
-            valid_statuses = [v for v, _ in Asset.STATUS_CHOICES]
-            new_status = request.POST.get('status', asset.status)
-            if new_status not in valid_statuses:
-                messages.error(request, 'Invalid status value.')
-                return redirect('asset_detail', pk=pk)
             old = asset.get_status_display()
-            asset.status = new_status
+            asset.status = request.POST.get('status', asset.status)
             asset.save()
             AssetHistory.objects.create(asset=asset,changed_by=request.user,change_type='Status Change',old_value=old,new_value=asset.get_status_display())
             messages.success(request,'Status updated.')
@@ -74,36 +65,22 @@ def asset_create(request):
     if request.method == 'POST':
         cat_id = request.POST.get('category')
         sid = request.POST.get('assigned_to')
-        assigned_to = None
-        if sid:
-            try:
-                assigned_to = StaffMember.objects.get(pk=int(sid))
-            except (StaffMember.DoesNotExist, ValueError):
-                messages.error(request, 'Selected staff member not found.')
-                return render(request,'assets/asset_form.html',{'categories':categories,'staff':staff,'status_choices':Asset.STATUS_CHOICES})
-        asset_id_val = request.POST.get('asset_id','').strip()
-        if Asset.objects.filter(asset_id=asset_id_val).exists():
-            messages.error(request, f'Asset ID "{asset_id_val}" already exists.')
-            return render(request,'assets/asset_form.html',{'categories':categories,'staff':staff,'status_choices':Asset.STATUS_CHOICES})
-        try:
-            asset = Asset.objects.create(
-                asset_id=asset_id_val,
-                name=request.POST.get('name','').strip(),
-                category_id=cat_id or None,
-                brand=request.POST.get('brand',''),
-                model=request.POST.get('model',''),
-                serial_number=request.POST.get('serial_number',''),
-                location=request.POST.get('location',''),
-                notes=request.POST.get('notes',''),
-                status=request.POST.get('status','active'),
-                assigned_to=assigned_to,
-                created_by=request.user,
-            )
-            AssetHistory.objects.create(asset=asset,changed_by=request.user,change_type='Registered',new_value='Asset created')
-            messages.success(request,f'Asset {asset.asset_id} registered.')
-            return redirect('asset_detail', pk=asset.pk)
-        except Exception as e:
-            messages.error(request, f'Could not register asset: {e}')
+        asset = Asset.objects.create(
+            asset_id=request.POST.get('asset_id','').strip(),
+            name=request.POST.get('name','').strip(),
+            category_id=cat_id or None,
+            brand=request.POST.get('brand',''),
+            model=request.POST.get('model',''),
+            serial_number=request.POST.get('serial_number',''),
+            location=request.POST.get('location',''),
+            notes=request.POST.get('notes',''),
+            status=request.POST.get('status','active'),
+            assigned_to=StaffMember.objects.get(pk=sid) if sid else None,
+            created_by=request.user,
+        )
+        AssetHistory.objects.create(asset=asset,changed_by=request.user,change_type='Registered',new_value='Asset created')
+        messages.success(request,f'Asset {asset.asset_id} registered.')
+        return redirect('asset_detail', pk=asset.pk)
     return render(request,'assets/asset_form.html',{
         'categories':categories,'staff':staff,'status_choices':Asset.STATUS_CHOICES
     })

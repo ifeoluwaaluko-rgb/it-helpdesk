@@ -31,7 +31,7 @@ def _normalize_rich_text(content):
         if (content.startswith('"') and content.endswith('"')) or '\\u' in content:
             try:
                 content = json.loads(content)
-            except (json.JSONDecodeError, TypeError):
+            except Exception:
                 pass
 
         if content == previous:
@@ -43,7 +43,7 @@ def _normalize_rich_text(content):
 def _get_role(user):
     try:
         return user.profile.role
-    except AttributeError:
+    except Exception:
         return 'associate'
 
 
@@ -57,7 +57,7 @@ def _can_delete_article(user, article):
 
 @login_required
 def article_list(request):
-    articles = Article.objects.only('id','title','category','tags','content','updated_at','created_at').all()
+    articles = Article.objects.all()
     q = request.GET.get('q', '').strip()
     category = request.GET.get('category')
     if q:

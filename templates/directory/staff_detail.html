@@ -43,7 +43,7 @@
       </span>
       {% endif %}
       <span class="inline-flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-sm text-gray-700">
-        📅 Added <span data-local-dt="{{ member.created_at|date:'c' }}" data-local-style="date">{{ member.created_at|date:"M d, Y" }}</span>
+        📅 Added {{ member.created_at|date:"M d, Y" }}
       </span>
     </div>
   </div>
@@ -80,7 +80,7 @@
         <div class="px-5 py-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition">
           <div class="min-w-0">
             <a href="{% url 'ticket_detail' t.pk %}" class="text-sm font-medium text-blue-600 hover:underline truncate block">#{{ t.id }} {{ t.title|truncatechars:45 }}</a>
-            <p class="text-xs text-gray-400 mt-0.5"><span data-local-dt="{{ t.created_at|date:'c' }}" data-local-style="date">{{ t.created_at|date:"M d, Y" }}</span> · {{ t.get_category_display }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">{{ t.created_at|date:"M d, Y" }} · {{ t.get_category_display }}</p>
           </div>
           <span class="badge flex-shrink-0 {% if t.status == 'open' %}bg-blue-100 text-blue-700{% elif t.status == 'in_progress' %}bg-yellow-100 text-yellow-700{% elif t.status == 'resolved' %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-600{% endif %}">
             {{ t.get_status_display }}

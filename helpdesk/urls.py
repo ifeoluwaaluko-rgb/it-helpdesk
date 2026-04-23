@@ -1,7 +1,10 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.shortcuts import redirect
 from django.views.generic import TemplateView
-from tickets.views import protected_media
+from django.conf import settings
+from django.conf.urls.static import static
+from django.views.generic import TemplateView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -11,5 +14,4 @@ urlpatterns = [
     path('', include('directory.urls')),
     path('', include('assets.urls')),
     path('', include('settings_app.urls')),
-    path('media/<path:path>', protected_media, name='protected_media'),
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -21,9 +21,9 @@
         <span class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-medium flex-shrink-0">{{ article.get_category_display }}</span>
       </div>
       <div class="text-xs text-gray-400 space-y-1">
-        <div>📝 Created by <span class="font-medium text-gray-600">{{ article.created_by.get_full_name|default:article.created_by.username|default:"System" }}</span> on <span data-local-dt="{{ article.created_at|date:'c' }}" data-local-style="date">{{ article.created_at|date:"M d, Y" }}</span></div>
+        <div>📝 Created by <span class="font-medium text-gray-600">{{ article.created_by.get_full_name|default:article.created_by.username|default:"System" }}</span> on {{ article.created_at|date:"M d, Y" }}</div>
         {% if article.last_modified_by and article.revisions.count > 0 %}
-        <div>✏️ Last modified by <span class="font-medium text-gray-600">{{ article.last_modified_by.get_full_name|default:article.last_modified_by.username }}</span> on <span data-local-dt="{{ article.updated_at|date:'c' }}" data-local-style="datetime">{{ article.updated_at|date:"M d, Y H:i" }}</span></div>
+        <div>✏️ Last modified by <span class="font-medium text-gray-600">{{ article.last_modified_by.get_full_name|default:article.last_modified_by.username }}</span> on {{ article.updated_at|date:"M d, Y H:i" }}</div>
         {% endif %}
       </div>
     </div>
@@ -54,7 +54,7 @@
           {% endif %}
           <div class="min-w-0">
             <p class="text-sm font-medium text-gray-700 group-hover:text-blue-700 truncate">{{ att.filename }}</p>
-            <p class="text-xs text-gray-400" data-local-dt="{{ att.uploaded_at|date:'c' }}" data-local-style="date">{{ att.uploaded_at|date:"M d, Y" }}</p>
+            <p class="text-xs text-gray-400">{{ att.uploaded_at|date:"M d, Y" }}</p>
           </div>
         </a>
         {% endfor %}

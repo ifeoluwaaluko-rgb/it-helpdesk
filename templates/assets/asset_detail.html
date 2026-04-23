@@ -43,7 +43,7 @@
       <div class="space-y-2">
         {% for inc in incidents %}
         <div class="flex items-start justify-between gap-3 py-2 border-b border-gray-50 last:border-0">
-          <div><p class="text-sm font-medium text-gray-800">{{ inc.title }}</p><p class="text-xs text-gray-400 mt-0.5"><span data-local-dt="{{ inc.created_at|date:'c' }}" data-local-style="date">{{ inc.created_at|date:"M d, Y" }}</span> · {{ inc.get_severity_display }}</p></div>
+          <div><p class="text-sm font-medium text-gray-800">{{ inc.title }}</p><p class="text-xs text-gray-400 mt-0.5">{{ inc.created_at|date:"M d, Y" }} · {{ inc.get_severity_display }}</p></div>
           <span class="badge {% if inc.resolved %}bg-green-100 text-green-700{% else %}bg-red-100 text-red-700{% endif %} flex-shrink-0">{% if inc.resolved %}Resolved{% else %}Open{% endif %}</span>
         </div>
         {% endfor %}
@@ -57,7 +57,7 @@
         {% for h in history %}
         <div class="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
           <div class="w-2 h-2 rounded-full bg-blue-400 mt-1.5 flex-shrink-0"></div>
-          <div><p class="text-xs text-gray-700"><strong>{{ h.change_type }}</strong>{% if h.old_value %} · {{ h.old_value }} → {{ h.new_value }}{% elif h.new_value %} · {{ h.new_value }}{% endif %}</p><p class="text-xs text-gray-400 mt-0.5">{{ h.changed_by.get_full_name|default:h.changed_by.username|default:"System" }} · <span data-local-dt="{{ h.created_at|date:'c' }}" data-local-style="datetime">{{ h.created_at|date:"M d, Y H:i" }}</span></p></div>
+          <div><p class="text-xs text-gray-700"><strong>{{ h.change_type }}</strong>{% if h.old_value %} · {{ h.old_value }} → {{ h.new_value }}{% elif h.new_value %} · {{ h.new_value }}{% endif %}</p><p class="text-xs text-gray-400 mt-0.5">{{ h.changed_by.get_full_name|default:h.changed_by.username|default:"System" }} · {{ h.created_at|date:"M d, Y H:i" }}</p></div>
         </div>
         {% endfor %}
       </div>
