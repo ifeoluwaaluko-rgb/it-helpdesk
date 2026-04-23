@@ -2,8 +2,7 @@
 {% block title %}Tickets — IT Helpdesk{% endblock %}
 {% block breadcrumb %}Tickets{% endblock %}
 {% block content %}
-<div data-ticket-list-page="1"></div>
-<div id="ticket-list-live-region">
+
 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
   <div>
     <h1 class="text-lg font-bold text-[#2f3941]">Tickets</h1>
@@ -86,7 +85,7 @@
         {% else %}<span class="text-orange-500 font-semibold">Unassigned</span>{% endif %}
       </td>
       <td class="px-4 py-3">{% include 'partials/status_badge.html' with status=t.status %}</td>
-      <td class="px-4 py-3 text-xs text-[#68737d] hidden lg:table-cell" data-local-dt="{{ t.created_at|date:'c' }}" data-local-style="short">{{ t.created_at|date:"M d, H:i" }}</td>
+      <td class="px-4 py-3 text-xs text-[#68737d] hidden lg:table-cell">{{ t.created_at|date:"M d, H:i" }}</td>
     </tr>
     {% empty %}
     <tr><td colspan="8" class="px-4 py-12 text-center text-[#68737d]">No tickets found.</td></tr>
@@ -94,42 +93,4 @@
     </tbody>
   </table>
 </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  if (!document.querySelector('[data-ticket-list-page]')) return;
-  const region = document.getElementById('ticket-list-live-region');
-  if (!region) return;
-  let busy = false;
-
-  async function silentRefreshTicketList() {
-    if (busy || document.hidden) return;
-    const active = document.activeElement;
-    if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return;
-    busy = true;
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set('_partial', 'ticket_list');
-      url.searchParams.set('_ts', Date.now().toString());
-      const response = await fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' });
-      if (!response.ok) return;
-      const html = await response.text();
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-      const nextRegion = doc.getElementById('ticket-list-live-region');
-      if (!nextRegion) return;
-      region.innerHTML = nextRegion.innerHTML;
-      if (window.upgradeDateNodes) window.upgradeDateNodes(region);
-    } catch (e) {
-      console.debug('Ticket list silent refresh skipped', e);
-    } finally {
-      busy = false;
-    }
-  }
-
-  setInterval(silentRefreshTicketList, 5000);
-});
-</script>
 {% endblock %}

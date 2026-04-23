@@ -1,298 +1,290 @@
 {% extends 'base.html' %}
 {% load ticket_time %}
-{% block title %}#{{ ticket.id }} {{ ticket.title }} — IT Helpdesk{% endblock %}
+{% block title %}#{{ ticket.id }} {{ ticket.title }}{% endblock %}
 {% block breadcrumb %}<a href="{% url 'ticket_list' %}" class="hover:text-[#1f73b7]">Tickets</a> <span class="mx-1">/</span> #{{ ticket.id }}{% endblock %}
-
 {% block content %}
+
+<!-- Top action bar -->
 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
   <div class="flex items-center gap-2 flex-wrap">
     {% include 'partials/status_badge.html' with status=ticket.status %}
     {% include 'partials/priority_badge.html' with priority=ticket.priority %}
-    {% if ticket.sla_state == 'red' %}
-      <span class="status-badge bg-red-100 text-red-700 animate-pulse">⚠ SLA Breached</span>
-    {% elif ticket.sla_state == 'yellow' %}
-      <span class="status-badge bg-yellow-100 text-yellow-700">⏳ SLA At Risk</span>
-    {% elif ticket.sla_state == 'green' %}
-      <span class="status-badge bg-green-100 text-green-700">✓ SLA On Track</span>
-    {% endif %}
+    {% if ticket.sla_state == 'red' %}<span class="status-badge bg-red-100 text-red-700 animate-pulse">⚠ SLA Breached</span>{% elif ticket.sla_state == 'yellow' %}<span class="status-badge bg-yellow-100 text-yellow-700">⏳ SLA At Risk</span>{% elif ticket.sla_state == 'green' %}<span class="status-badge bg-green-100 text-green-700">✓ SLA On Track</span>{% endif %}
     {% if ticket.channel != 'manual' %}
-      <span class="tag">
-        {% if ticket.channel == 'email' %}📧{% elif ticket.channel == 'walk_in' %}🚶{% elif ticket.channel == 'phone' %}📞{% else %}💬{% endif %}
-        {{ ticket.get_channel_display }}
-      </span>
+    <span class="tag">{% if ticket.channel == 'email' %}📧{% elif ticket.channel == 'walk_in' %}🚶{% elif ticket.channel == 'phone' %}📞{% else %}💬{% endif %} {{ ticket.get_channel_display }}</span>
     {% endif %}
   </div>
   <div class="flex items-center gap-2 flex-wrap">
     {% if not ticket.assigned_to %}
-      <form method="post">{% csrf_token %}
-        <input type="hidden" name="action" value="pickup">
-        <button class="zd-btn zd-btn-secondary">Pick Up</button>
-      </form>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="pickup">
+      <button class="zd-btn zd-btn-primary text-xs">🙋 Pick Up</button>
+    </form>
     {% endif %}
-    {% if can_edit %}
-      <a href="{% url 'ticket_edit' ticket.pk %}" class="zd-btn zd-btn-secondary">← Edit</a>
-    {% endif %}
-    <a href="{% url 'ticket_history' ticket.pk %}" class="zd-btn zd-btn-secondary">◷ History</a>
+    <a href="{% url 'ticket_edit' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">✏ Edit</a>
+    <a href="{% url 'ticket_history' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">🕓 History{% if ticket.edit_history.count %} ({{ ticket.edit_history.count }}){% endif %}</a>
     {% if can_delete %}
-      <a href="{% url 'ticket_delete' ticket.pk %}" class="zd-btn border border-red-300 text-red-600 bg-white hover:bg-red-50">🗑 Delete</a>
+    <a href="{% url 'ticket_delete' ticket.pk %}" class="zd-btn zd-btn-danger text-xs">🗑 Delete</a>
+    {% endif %}
+    {% if ticket.status == 'resolved' %}
+    <a href="{% url 'create_article_from_ticket' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">📚 Save to KB</a>
     {% endif %}
   </div>
 </div>
 
-<div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
-  <div class="xl:col-span-2 space-y-5">
-    <section class="zd-card overflow-hidden">
-      <div class="p-6 border-b border-slate-200">
-        <h1 class="text-2xl font-bold text-slate-900">{{ ticket.title }}</h1>
-        <div class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-500">
-          <span>From: <span class="font-semibold text-slate-700">{{ ticket.requester_name|default:ticket.user_email }}</span></span>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+  <!-- LEFT: Main content -->
+  <div class="lg:col-span-2 space-y-4">
+
+    <!-- Ticket body -->
+    <div class="zd-card">
+      <div class="px-5 py-4 border-b border-[#e9ebed]">
+        <h1 class="text-base font-bold text-[#2f3941]">{{ ticket.title }}</h1>
+        <div class="flex flex-wrap items-center gap-3 mt-2 text-xs text-[#68737d]">
+          <span>From: <strong class="text-[#2f3941]">{{ ticket.requester_name|default:ticket.user_email }}</strong></span>
           <span>·</span>
-          <span data-local-dt="{{ ticket.created_at|date:'c' }}" data-local-style="short">{{ ticket.created_at|date:"M d, H:i" }}</span>
+          <span>{{ ticket.created_at|date:"M d, Y H:i" }}</span>
           <span>·</span>
-          <span>{{ ticket.category_display }}{% if ticket.subcategory %} → {{ ticket.subcategory }}{% endif %}{% if ticket.item %} → {{ ticket.item }}{% endif %}</span>
+          <span class="capitalize">{{ ticket.category_display }}</span>
         </div>
       </div>
-
-      <div class="bg-blue-50 border-b border-blue-100 px-6 py-4 flex items-start justify-between gap-3">
-        <div>
-          <div class="font-semibold text-[#1f73b7]">SLA: {{ ticket.sla_target_seconds|human_duration }} target</div>
-          {% if ticket.status in 'resolved closed' %}
-            <div class="text-sm text-slate-600 mt-1">Completed in {{ ticket.resolution_time_seconds|human_duration }}</div>
-          {% else %}
-            <div class="text-sm {% if ticket.sla_state == 'red' %}text-red-600{% elif ticket.sla_state == 'yellow' %}text-yellow-700{% else %}text-[#2563eb]{% endif %} mt-1">
-              {% if ticket.sla_remaining_seconds < 0 %}{{ ticket.sla_remaining_seconds|human_duration }} overdue{% else %}{{ ticket.sla_remaining_seconds|human_duration }} remaining{% endif %}
-            </div>
-          {% endif %}
+      <!-- SLA Bar -->
+      {% if ticket.status not in 'resolved,closed' %}
+      <div class="px-5 py-3 border-b border-[#e9ebed] {% if ticket.is_sla_breached %}bg-red-50{% else %}bg-blue-50{% endif %}">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-semibold {% if ticket.is_sla_breached %}text-red-600{% else %}text-[#1f73b7]{% endif %}">
+            {% if ticket.is_sla_breached %}⏰ SLA Deadline Passed{% else %}⏱ SLA: {{ ticket.sla_target_seconds|human_duration }} target{% endif %}
+          </span>
+          <span class="font-mono font-semibold {% if ticket.is_sla_breached %}text-red-700{% else %}text-[#1f73b7]{% endif %}" id="sla-timer">{{ ticket.sla_deadline|date:"M d, H:i" }}</span>
         </div>
-        <div class="text-sm font-semibold text-[#1f73b7]" data-local-dt="{{ ticket.sla_deadline|date:'c' }}" data-local-style="short">
-          {{ ticket.sla_deadline|date:"M d, H:i" }}
-        </div>
-      </div>
-
-      <div class="p-6">
-        <div class="prose max-w-none text-slate-700 whitespace-pre-line">{{ ticket.description }}</div>
-
-        {% if ticket.attachments.all %}
-          <div class="mt-6 border-t border-slate-200 pt-5">
-            <div class="text-xs font-semibold tracking-wide text-slate-500 uppercase mb-3">Attachments ({{ ticket.attachments.count }})</div>
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {% for att in ticket.attachments.all %}
-                <div class="border border-slate-200 rounded-2xl p-3 bg-white">
-                  {% if att.is_image %}
-                    <button type="button"
-                            class="block w-full text-left"
-                            data-lightbox-image="{{ att.file.url }}"
-                            data-lightbox-title="{{ att.filename }}">
-                      <img src="{{ att.file.url }}" alt="{{ att.filename }}" class="w-full h-28 object-cover rounded-xl border border-slate-200">
-                    </button>
-                    <div class="mt-2 text-sm text-slate-700 break-words">{{ att.filename }}</div>
-                    <a href="{{ att.file.url }}" target="_blank" rel="noopener" class="text-xs text-[#1f73b7] hover:underline">Open original</a>
-                  {% else %}
-                    <a href="{{ att.file.url }}" target="_blank" rel="noopener" class="flex flex-col items-start gap-2">
-                      <div class="w-full h-28 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-3xl">📄</div>
-                      <div class="text-sm text-slate-700 break-words">{{ att.filename }}</div>
-                      <div class="text-xs text-[#1f73b7]">Download file</div>
-                    </a>
-                  {% endif %}
-                </div>
-              {% endfor %}
-            </div>
-          </div>
+        {% if not ticket.is_sla_breached %}
+        <div class="text-xs text-blue-500 mt-1" id="sla-countdown">Calculating...</div>
         {% endif %}
       </div>
-    </section>
+      {% endif %}
+      <div class="px-5 py-4">
+        <div class="text-sm text-[#2f3941] leading-relaxed whitespace-pre-wrap">{{ ticket.description }}</div>
+        {% if ticket.tags %}
+        <div class="flex flex-wrap gap-1.5 mt-4">
+          {% for tag in ticket.tag_list %}<span class="tag">{{ tag }}</span>{% endfor %}
+        </div>
+        {% endif %}
 
-    <section class="zd-card p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-bold text-slate-900">Conversation</h2>
-        <span class="text-sm text-slate-400">{{ comments|length }} note{{ comments|pluralize }}</span>
-      </div>
-
-      <div class="space-y-4">
-        {% for comment in comments %}
-          <div class="border border-slate-200 rounded-xl p-4 bg-slate-50">
-            <div class="flex items-center justify-between gap-3 mb-2">
-              <div class="font-semibold text-slate-800">{{ comment.author.get_full_name|default:comment.author.username }}</div>
-              <div class="text-xs text-slate-500" data-local-dt="{{ comment.created_at|date:'c' }}" data-local-style="short">{{ comment.created_at|date:"M d, H:i" }}</div>
-            </div>
-            <div class="text-sm text-slate-700 whitespace-pre-line">{{ comment.body }}</div>
+        {% if ticket.attachments.exists %}
+        <!-- Email / uploaded attachments -->
+        <div class="mt-5 pt-4 border-t border-[#e9ebed]">
+          <p class="text-xs font-semibold text-[#68737d] uppercase tracking-wide mb-3">📎 Attachments ({{ ticket.attachments.count }})</p>
+          <div class="flex flex-wrap gap-3">
+            {% for att in ticket.attachments.all %}
+              {% if att.is_image %}
+              <!-- Image thumbnail — click to open full size -->
+              <a href="{{ att.file.url }}" target="_blank" rel="noopener"
+                 class="group relative block w-28 h-28 rounded-xl overflow-hidden border border-[#e9ebed] hover:border-[#1f73b7] transition shadow-sm">
+                <img src="{{ att.file.url }}" alt="{{ att.filename }}"
+                     class="w-full h-full object-cover group-hover:scale-105 transition duration-200">
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-end">
+                  <p class="w-full text-center text-white text-[10px] py-1 bg-black/40 translate-y-full group-hover:translate-y-0 transition truncate px-1">{{ att.filename }}</p>
+                </div>
+              </a>
+              {% else %}
+              <!-- File attachment -->
+              <a href="{{ att.file.url }}" target="_blank" rel="noopener"
+                 class="flex items-center gap-2 bg-[#f3f4f6] hover:bg-[#e9ebed] border border-[#e9ebed] rounded-xl px-3 py-2.5 transition group">
+                <span class="text-2xl">📄</span>
+                <div>
+                  <p class="text-xs font-medium text-[#2f3941] group-hover:text-[#1f73b7] truncate max-w-[140px]">{{ att.filename }}</p>
+                  <p class="text-[10px] text-[#68737d]">{{ att.source|title }}</p>
+                </div>
+              </a>
+              {% endif %}
+            {% endfor %}
           </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Comments -->
+    <div class="zd-card">
+      <div class="px-5 py-3 border-b border-[#e9ebed] flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-[#2f3941]">Conversation</h2>
+        <span class="text-xs text-[#68737d]">{{ comments.count }} note{{ comments.count|pluralize }}</span>
+      </div>
+      <div class="divide-y divide-[#e9ebed]">
+        {% for comment in comments %}
+        <div class="px-5 py-4 flex gap-3">
+          <div class="w-8 h-8 rounded-full bg-[#1f73b7] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{{ comment.author.username|first|upper }}</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="text-xs font-semibold text-[#2f3941]">{{ comment.author.get_full_name|default:comment.author.username }}</span>
+              <span class="text-xs text-[#68737d]">{{ comment.created_at|date:"M d, H:i" }}</span>
+              {% if comment.is_internal %}<span class="tag text-[10px]">Internal</span>{% endif %}
+            </div>
+            <div class="text-sm text-[#2f3941] leading-relaxed">{{ comment.body }}</div>
+          </div>
+        </div>
         {% empty %}
-          <div class="text-sm text-slate-500">No conversation yet.</div>
+        <div class="px-5 py-6 text-sm text-[#68737d] text-center">No notes yet.</div>
         {% endfor %}
       </div>
+      <div class="px-5 py-4 border-t border-[#e9ebed] bg-[#f9fafb]">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="comment">
+          <textarea name="body" rows="3" placeholder="Add an internal note..." required
+            class="zd-input resize-none mb-2"></textarea>
+          <div class="flex justify-end">
+            <button type="submit" class="zd-btn zd-btn-primary text-xs">Submit Note</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
-      <form method="post" class="mt-5 space-y-3">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="comment">
-        <label class="zd-label">Add internal note</label>
-        <textarea name="body" rows="4" class="zd-input" placeholder="Add context, troubleshooting steps, or handover notes..."></textarea>
-        <button class="zd-btn zd-btn-primary">Save Note</button>
-      </form>
-    </section>
-
+    <!-- Related KB -->
     {% if related_articles %}
-      <section class="zd-card p-6">
-        <h2 class="text-lg font-bold text-slate-900 mb-4">Suggested Knowledge Articles</h2>
-        <div class="space-y-3">
-          {% for article in related_articles %}
-            <a href="{% url 'article_detail' article.pk %}" class="block border border-slate-200 rounded-xl p-4 hover:bg-slate-50">
-              <div class="font-semibold text-[#1f73b7]">{{ article.title }}</div>
-              <div class="text-sm text-slate-500 mt-1">{{ article.preview_text|default:article.content|truncatechars:140 }}</div>
-            </a>
-          {% endfor %}
+    <div class="zd-card p-5">
+      <h2 class="text-sm font-semibold text-[#2f3941] mb-3">💡 Suggested Articles</h2>
+      <div class="space-y-2">
+        {% for a in related_articles %}
+        <div class="flex items-start gap-2">
+          <svg class="w-4 h-4 text-[#1f8c8c] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <div><a href="{% url 'article_detail' a.pk %}" class="text-sm text-[#1f73b7] hover:underline font-medium">{{ a.title }}</a><p class="text-xs text-[#68737d]">{{ a.preview_text|default:a.content|truncatechars:90 }}</p></div>
         </div>
-      </section>
+        {% endfor %}
+      </div>
+    </div>
     {% endif %}
   </div>
 
-  <aside class="space-y-5">
-    <section class="zd-card p-5">
-      <h3 class="text-xs uppercase tracking-wide font-bold text-slate-500 mb-4">Category</h3>
-      <form method="post" class="space-y-4">
+  <!-- RIGHT: Sidebar -->
+  <div class="space-y-4">
+
+    <!-- Category (editable inline) -->
+    <div class="zd-card p-4">
+      <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Category</h3>
+      <form method="post" id="cat-form">
         {% csrf_token %}
         <input type="hidden" name="action" value="update_category">
-        <div>
-          <label class="zd-label">Category</label>
-          <select name="category" class="zd-select w-full">
-            {% for val, label in category_choices %}
-              <option value="{{ val }}" {% if ticket.category == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="zd-label">Subcategory</label>
-          <input type="text" name="subcategory" value="{{ ticket.subcategory }}" class="zd-input" placeholder="Subcategory">
-        </div>
-        <div>
-          <label class="zd-label">Item</label>
-          <input type="text" name="item" value="{{ ticket.item }}" class="zd-input" placeholder="Specific item">
-        </div>
-        <button class="zd-btn zd-btn-secondary w-full">Update Category</button>
-      </form>
-    </section>
-
-    <section class="zd-card p-5">
-      <h3 class="text-xs uppercase tracking-wide font-bold text-slate-500 mb-4">Status</h3>
-      <form method="post" class="space-y-4">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="update_status">
-        <div>
-          <label class="zd-label">Status</label>
-          <select name="status" class="zd-select w-full">
-            {% for val, label in status_choices %}
-              <option value="{{ val }}" {% if ticket.status == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <button class="zd-btn zd-btn-primary w-full">Update Status</button>
-      </form>
-      {% if resolved_event %}
-        <div class="mt-4 rounded-xl bg-green-50 border border-green-100 px-4 py-3 text-sm text-green-800">
-          {{ resolved_event.action_display }} by
-          <span class="font-semibold">
-            {% if resolved_event.actor %}
-              {{ resolved_event.actor.get_full_name|default:resolved_event.actor.username }}
-            {% else %}
-              System
-            {% endif %}
-          </span>
-          <span class="block text-xs text-green-700 mt-1" data-local-dt="{{ resolved_event.created_at|date:'c' }}" data-local-style="short">{{ resolved_event.created_at|date:"M d, H:i" }}</span>
-        </div>
-      {% endif %}
-    </section>
-
-    {% if can_assign %}
-      <section class="zd-card p-5">
-        <h3 class="text-xs uppercase tracking-wide font-bold text-slate-500 mb-4">Assignment</h3>
-        <form method="post" class="space-y-4">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="reassign">
+        <div class="space-y-2">
           <div>
-            <label class="zd-label">Assigned To</label>
-            <select name="user_id" class="zd-select w-full">
-              <option value="">Select staff member</option>
-              {% for user in staff_users %}
-                <option value="{{ user.id }}" {% if ticket.assigned_to and ticket.assigned_to.id == user.id %}selected{% endif %}>
-                  {{ user.get_full_name|default:user.username }}
-                </option>
+            <label class="zd-label">Category</label>
+            <select name="category" id="cat-select" class="zd-select" onchange="loadSubcategories(this.value)">
+              {% for val, label in category_choices %}
+              <option value="{{ val }}" {% if ticket.category == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
           </div>
-          <button class="zd-btn zd-btn-secondary w-full">{% if ticket.assigned_to %}Reassign Ticket{% else %}Assign Ticket{% endif %}</button>
-        </form>
-      </section>
+          <div>
+            <label class="zd-label">Subcategory</label>
+            <select name="subcategory" id="subcat-select" class="zd-select" onchange="loadItems(this.value)">
+              <option value="{{ ticket.subcategory }}">{{ ticket.subcategory|default:"— Select —" }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="zd-label">Item</label>
+            <input type="text" name="item" id="item-input" value="{{ ticket.item }}" class="zd-input" placeholder="Specific item...">
+          </div>
+          <button type="submit" class="zd-btn zd-btn-secondary w-full justify-center text-xs">Update Category</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Status & Assign -->
+    <div class="zd-card p-4">
+      <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Status</h3>
+      <form method="post" class="mb-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_status">
+        <select name="status" class="zd-select mb-2">
+          {% for val, label in status_choices %}<option value="{{ val }}" {% if ticket.status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="zd-btn zd-btn-primary w-full justify-center text-xs">Update Status</button>
+      </form>
+    </div>
+
+    {% if can_assign %}
+    <div class="zd-card p-4">
+      <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Assignee</h3>
+      <p class="text-sm font-medium text-[#2f3941] mb-2">
+        {% if ticket.assigned_to %}{{ ticket.assigned_to.get_full_name|default:ticket.assigned_to.username }}
+        {% else %}<span class="text-orange-500">Unassigned</span>{% endif %}
+      </p>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="reassign">
+        <select name="user_id" class="zd-select mb-2">
+          <option value="">— Select staff —</option>
+          {% for u in staff_users %}<option value="{{ u.id }}" {% if ticket.assigned_to.id == u.id %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="zd-btn zd-btn-secondary w-full justify-center text-xs">Reassign</button>
+      </form>
+    </div>
     {% endif %}
 
-    <section class="zd-card p-5">
-      <h3 class="text-xs uppercase tracking-wide font-bold text-slate-500 mb-4">Activity Log</h3>
-      <div class="space-y-3">
-        {% for event in status_events %}
-          <div class="border border-slate-200 rounded-xl p-3">
-            <div class="flex items-center justify-between gap-3">
-              <div class="text-sm font-semibold text-slate-800">{{ event.action_display }}</div>
-              <div class="text-xs text-slate-500" data-local-dt="{{ event.created_at|date:'c' }}" data-local-style="short">{{ event.created_at|date:"M d, H:i" }}</div>
-            </div>
-            <div class="text-xs text-slate-600 mt-1">
-              {% if event.actor %}by {{ event.actor.get_full_name|default:event.actor.username }}{% else %}by System{% endif %}
-              {% if event.from_status or event.to_status %}
-                · {{ event.from_status|default:"—"|title }} → {{ event.to_status|default:"—"|title }}
-              {% endif %}
-            </div>
-            {% if event.note %}
-              <div class="text-xs text-slate-500 mt-2">{{ event.note }}</div>
-            {% endif %}
-          </div>
-        {% empty %}
-          <div class="text-sm text-slate-500">No activity recorded yet.</div>
-        {% endfor %}
-      </div>
-    </section>
-  </aside>
-</div>
-
-<div id="ticketLightboxOverlay" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 p-4">
-  <button type="button" id="ticketLightboxClose" class="absolute top-4 right-5 text-white text-4xl leading-none">&times;</button>
-  <div class="max-w-5xl w-full flex items-center justify-center">
-    <img id="ticketLightboxImage" src="" alt="" class="max-h-[85vh] max-w-full rounded-xl shadow-2xl">
+    <!-- Metadata -->
+    <div class="zd-card p-4">
+      <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Details</h3>
+      <dl class="space-y-2 text-xs">
+        <div class="flex justify-between"><dt class="text-[#68737d]">Ticket ID</dt><dd class="font-mono font-semibold">#{{ ticket.id }}</dd></div>
+        <div class="flex justify-between"><dt class="text-[#68737d]">Channel</dt><dd>{{ ticket.get_channel_display }}</dd></div>
+        <div class="flex justify-between"><dt class="text-[#68737d]">Required Level</dt><dd class="capitalize">{{ ticket.required_level }}</dd></div>
+        <div class="flex justify-between"><dt class="text-[#68737d]">SLA Target</dt><dd>{{ ticket.sla_target_seconds|human_duration }}</dd></div>
+        {% if ticket.first_response_at %}<div class="flex justify-between"><dt class="text-[#68737d]">First Response</dt><dd class="font-semibold">{{ ticket.first_response_at|date:"M d, H:i" }}</dd></div><div class="flex justify-between"><dt class="text-[#68737d]">FRT</dt><dd class="text-cyan-700 font-semibold">{{ ticket.first_response_seconds|human_duration }}</dd></div>{% endif %}{% if ticket.resolution_time_seconds %}<div class="flex justify-between"><dt class="text-[#68737d]">Resolved In</dt><dd class="text-green-600 font-semibold">{{ ticket.resolution_time_seconds|human_duration }}</dd></div>{% endif %}
+        <div class="flex justify-between"><dt class="text-[#68737d]">Created</dt><dd>{{ ticket.created_at|date:"M d, Y" }}</dd></div>
+        <div class="flex justify-between"><dt class="text-[#68737d]">Updated</dt><dd>{{ ticket.updated_at|date:"M d, H:i" }}</dd></div>
+      </dl>
+    </div>
   </div>
-  <div id="ticketLightboxCaption" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white text-sm px-3 py-1 rounded-xl"></div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-  const overlay = document.getElementById('ticketLightboxOverlay');
-  const image = document.getElementById('ticketLightboxImage');
-  const caption = document.getElementById('ticketLightboxCaption');
-  const closeBtn = document.getElementById('ticketLightboxClose');
-  if (!overlay || !image || !closeBtn) return;
+const categoryTree = {{ category_tree_json|safe }};
 
-  document.querySelectorAll('[data-lightbox-image]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      image.src = btn.getAttribute('data-lightbox-image');
-      caption.textContent = btn.getAttribute('data-lightbox-title') || '';
-      overlay.classList.remove('hidden');
-      overlay.classList.add('flex');
-      document.body.style.overflow = 'hidden';
-    });
+function loadSubcategories(cat, selectedSub) {
+  const sel = document.getElementById('subcat-select');
+  sel.innerHTML = '<option value="">— Select —</option>';
+  const subs = categoryTree[cat]?.subcategories || {};
+  Object.keys(subs).forEach(sub => {
+    const opt = document.createElement('option');
+    opt.value = sub; opt.textContent = sub;
+    if (sub === selectedSub) opt.selected = true;
+    sel.appendChild(opt);
   });
+}
 
-  function closeLightbox() {
-    overlay.classList.add('hidden');
-    overlay.classList.remove('flex');
-    image.src = '';
-    document.body.style.overflow = '';
+function loadItems(sub) {
+  const cat = document.getElementById('cat-select').value;
+  const inp = document.getElementById('item-input');
+  const items = categoryTree[cat]?.subcategories?.[sub] || [];
+  // Suggest first item if empty
+  if (inp.value === '' && items.length) inp.value = items[0] !== 'Other' ? items[0] : '';
+}
+
+// Init
+loadSubcategories('{{ ticket.category }}', '{{ ticket.subcategory }}');
+
+// SLA countdown
+const remaining = {{ ticket.sla_remaining_seconds }};
+const el = document.getElementById('sla-countdown');
+if (el && remaining > 0) {
+  const start = Date.now();
+  function formatRemaining(sec) {
+    if (sec < 60) return `${sec}s remaining`;
+    const minutes = Math.floor(sec / 60);
+    if (minutes < 60) return `${minutes}m remaining`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h remaining`;
+    const days = Math.floor(hours / 24);
+    return `${days}d remaining`;
   }
-
-  closeBtn.addEventListener('click', closeLightbox);
-  overlay.addEventListener('click', function (e) {
-    if (e.target === overlay) closeLightbox();
-  });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closeLightbox();
-  });
-});
+  function tick() {
+    const left = remaining - Math.floor((Date.now()-start)/1000);
+    if (left <= 0) { el.textContent = 'Deadline has passed'; el.className = 'text-xs text-red-500 font-semibold mt-1'; return; }
+    el.textContent = formatRemaining(left);
+    if (left < 3600) el.className = 'text-xs text-orange-500 font-semibold mt-1';
+    setTimeout(tick, 1000);
+  }
+  tick();
+}
 </script>
 {% endblock %}

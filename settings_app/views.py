@@ -6,14 +6,13 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.conf import settings as dj_settings
 from .models import IntegrationConfig, IntegrationAuditLog
-from .mail import get_outbound_mail_config
 from tickets.models import TicketCategory, TicketSubcategory, Ticket
 
 
 def _role(user):
     try:
         return user.profile.role
-    except AttributeError:
+    except Exception:
         return ''
 
 
@@ -123,16 +122,9 @@ def save_smtp(request):
         return redirect('settings_home')
     cfg, _ = IntegrationConfig.objects.get_or_create(integration='email_smtp')
     cfg.host = request.POST.get('host', '').strip()
-    raw_port = (request.POST.get('port', '') or '').strip()
-    use_tls = request.POST.get('use_tls') == 'on'
-    use_ssl = request.POST.get('use_ssl') == 'on'
-    if use_ssl and not raw_port:
-        raw_port = '465'
-    elif use_tls and not raw_port:
-        raw_port = '587'
-    cfg.port = int(raw_port or (465 if use_ssl else 587))
+    cfg.port = int(request.POST.get('port', 587) or 587)
     cfg.username = request.POST.get('username', '').strip()
-    cfg.use_tls = use_tls and not use_ssl
+    cfg.use_tls = request.POST.get('use_tls') == 'on'
     cfg.is_active = request.POST.get('is_active') == 'on'
     pw = request.POST.get('password', '').strip()
     if pw:
@@ -140,11 +132,10 @@ def save_smtp(request):
     cfg.updated_by = request.user
     cfg.save()
     dj_settings.EMAIL_HOST = cfg.host
-    dj_settings.EMAIL_PORT = cfg.port or (465 if use_ssl else 587)
+    dj_settings.EMAIL_PORT = cfg.port or 587
     dj_settings.EMAIL_HOST_USER = cfg.username
     dj_settings.EMAIL_HOST_PASSWORD = cfg.password
-    dj_settings.EMAIL_USE_TLS = bool(cfg.use_tls)
-    dj_settings.EMAIL_USE_SSL = bool((cfg.port == 465) and not cfg.use_tls)
+    dj_settings.EMAIL_USE_TLS = cfg.use_tls
     _log(request.user, 'email_smtp', 'save', 'success', 'SMTP settings saved')
     messages.success(request, 'SMTP settings saved.')
     return redirect('settings_home')
@@ -304,7 +295,7 @@ def test_connection(request, integration):
             ok, msg = _test_openai(cfg)
         else:
             ok, msg = False, 'Unknown integration.'
-    except (ValueError, OSError) as exc:
+    except Exception as exc:
         ok, msg = False, str(exc)
 
     _log(request.user, integration, 'test', 'success' if ok else 'error', msg)
@@ -313,26 +304,13 @@ def test_connection(request, integration):
 
 def _test_smtp(cfg):
     try:
-        host = cfg.host
-        port = cfg.port or 587
-        username = cfg.username
-        password = cfg.password
-        use_ssl = (port == 465 and not cfg.use_tls)
-
-        if use_ssl:
-            server = smtplib.SMTP_SSL(host, port, timeout=8)
-        else:
-            server = smtplib.SMTP(host, port, timeout=8)
-            if cfg.use_tls:
-                server.starttls()
-
-        server.login(username, password)
+        import smtplib
+        server = smtplib.SMTP(cfg.host, cfg.port or 587, timeout=8)
+        if cfg.use_tls:
+            server.starttls()
+        server.login(cfg.username, cfg.password)
         server.quit()
         return True, 'SMTP connection successful.'
-    except OSError as e:
-        if (cfg.port or 587) == 587:
-            return False, f'SMTP error: {e}. Railway blocks port 587 outbound. Switch to port 465 (SSL) or use Mailgun/Resend/SendGrid on port 2525.'
-        return False, f'SMTP error: {e}'
     except Exception as e:
         return False, f'SMTP error: {e}'
 

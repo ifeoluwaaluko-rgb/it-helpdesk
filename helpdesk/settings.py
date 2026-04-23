@@ -10,6 +10,7 @@ ALLOWED_HOSTS = [
     'web-production-a03c9.up.railway.app',
     '127.0.0.1',
     'localhost',
+    '*',
 ]
 
 CSRF_TRUSTED_ORIGINS = [
@@ -101,15 +102,10 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-USE_S3_STORAGE = False  # local storage only for now
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/login/'
-
-EMAIL_ENABLED = os.environ.get('EMAIL_ENABLED', 'False').strip().lower() == 'true'
-EMAIL_POLL_SECONDS = max(15, int(os.environ.get('EMAIL_POLL_SECONDS', '15')))
 
 # IMAP
 IMAP_HOST = os.environ.get('IMAP_HOST', 'imap.gmail.com')
@@ -122,8 +118,7 @@ IMAP_FOLDER = 'INBOX'
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() == 'true'
-EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() == 'true'
+EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'IT Helpdesk <noreply@helpdesk.com>')
@@ -159,4 +154,3 @@ LOGGING = {
         },
     },
 }
-EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '5'))

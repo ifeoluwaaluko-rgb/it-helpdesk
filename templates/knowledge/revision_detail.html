@@ -7,7 +7,7 @@
     <h1 class="text-2xl font-bold text-gray-800 mt-2">Version Snapshot</h1>
     <p class="text-sm text-gray-500 mt-1">
       Saved by <strong>{{ revision.edited_by.get_full_name|default:revision.edited_by.username }}</strong>
-      on <span data-local-dt="{{ revision.edited_at|date:'c' }}" data-local-style="datetime">{{ revision.edited_at|date:"M d, Y H:i" }}</span>
+      on {{ revision.edited_at|date:"M d, Y H:i" }}
       {% if revision.revision_note %} — <em>"{{ revision.revision_note }}"</em>{% endif %}
     </p>
   </div>

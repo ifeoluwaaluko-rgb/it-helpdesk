@@ -20,18 +20,16 @@
   <div id="smtp-card" class="hidden px-6 py-5">
     <form method="post" action="{% url 'save_smtp' %}" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {% csrf_token %}
-      <div><label class="zd-label">SMTP Host</label><input name="host" value="{{ configs.email_smtp.host }}" class="zd-input" placeholder="smtp.gmail.com"></div>
-      <div><label class="zd-label">Port</label><input name="port" type="number" value="{{ configs.email_smtp.port|default:'465' }}" class="zd-input"></div>
-      <div><label class="zd-label">Username</label><input name="username" value="{{ configs.email_smtp.username }}" class="zd-input" placeholder="it@company.com"></div>
-      <div><label class="zd-label">Password / App Password</label><input name="password" type="password" class="zd-input" placeholder="{{ configs.email_smtp.masked_password }}"></div>
-      <div class="sm:col-span-2 flex items-center gap-6 flex-wrap">
-        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="use_tls" {% if configs.email_smtp.use_tls and configs.email_smtp.port != 465 %}checked{% endif %}> Use TLS (587)</label>
-        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="use_ssl" {% if configs.email_smtp.use_ssl %}checked{% endif %}> Use SSL (465)</label>
-        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" {% if configs.email_smtp.is_active %}checked{% endif %}> Active</label>
-      </div>
-      <div class="sm:col-span-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-        Railway often blocks port 587. For Gmail on Railway, use <strong>port 465 + SSL</strong> with a Google App Password.
-      </div>
+      
+<div><label class="zd-label">SMTP Host</label><input name="host" value="{{ configs.email_smtp.host }}" class="zd-input" placeholder="smtp.gmail.com"></div>
+<div><label class="zd-label">Port</label><input name="port" type="number" value="{{ configs.email_smtp.port|default:'587' }}" class="zd-input"></div>
+<div><label class="zd-label">Username</label><input name="username" value="{{ configs.email_smtp.username }}" class="zd-input" placeholder="it@company.com"></div>
+<div><label class="zd-label">Password / App Password</label><input name="password" type="password" class="zd-input" placeholder="{{ configs.email_smtp.masked_password }}"></div>
+<div class="sm:col-span-2 flex items-center gap-6">
+  <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="use_tls" {% if configs.email_smtp.use_tls %}checked{% endif %}> Use TLS</label>
+  <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" {% if configs.email_smtp.is_active %}checked{% endif %}> Active</label>
+</div>
+
       <div class="sm:col-span-2 pt-2">
         <button class="zd-btn zd-btn-primary">Save</button>
       </div>

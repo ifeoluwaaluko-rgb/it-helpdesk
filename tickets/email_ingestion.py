@@ -1,26 +1,21 @@
-
 """
 IMAP Email Ingestion.
-Run from a dedicated worker or scheduled command to pull new emails.
+Run on a schedule (cron / management command) to pull new emails.
 Saves inline images and file attachments to TicketAttachment.
 """
-import email
 import imaplib
-import logging
+import email
 import re
 from email.header import decode_header
-from email.utils import parseaddr
 
 from django.conf import settings
 from django.core.files.base import ContentFile
-from django.db import transaction
 
-from .assignment import auto_assign
+from .models import Ticket, TicketAttachment
 from .classifier import classify
-from .models import Ticket, TicketAttachment, TicketEvent
+from .assignment import auto_assign
 from .notifications import notify_ticket_received
 
-logger = logging.getLogger(__name__)
 
 AUTO_REPLY_PATTERNS = (
     'automatic reply',
@@ -35,90 +30,103 @@ AUTO_REPLY_PATTERNS = (
 def _get_imap_config():
     """
     Prefer DB-backed integration settings saved from the frontend settings page.
-    Fall back to Django settings / env values.
+    Fall back to Django settings / env vars if no active DB config exists.
     """
-    cfg = {
+    try:
+        from settings_app.models import IntegrationConfig
+        cfg = IntegrationConfig.objects.filter(
+            integration='email_imap',
+            is_active=True,
+        ).first()
+        if cfg and cfg.is_configured():
+            return {
+                'host': cfg.host,
+                'port': int(cfg.port or 993),
+                'username': cfg.username,
+                'password': cfg.password,
+                'folder': 'INBOX',
+            }
+    except Exception as exc:
+        print(f"[Email Ingestion Config Warning] Falling back to env IMAP config: {exc}")
+
+    return {
         'host': getattr(settings, 'IMAP_HOST', ''),
         'port': int(getattr(settings, 'IMAP_PORT', 993) or 993),
         'username': getattr(settings, 'IMAP_USER', ''),
         'password': getattr(settings, 'IMAP_PASSWORD', ''),
-        'folder': getattr(settings, 'IMAP_FOLDER', 'INBOX') or 'INBOX',
+        'folder': getattr(settings, 'IMAP_FOLDER', 'INBOX'),
     }
-    try:
-        from settings_app.models import IntegrationConfig
-        db_cfg = IntegrationConfig.objects.get(integration='email_imap')
-        if db_cfg and db_cfg.is_active and db_cfg.is_configured():
-            cfg.update({
-                'host': db_cfg.host or cfg['host'],
-                'port': int(db_cfg.port or cfg['port']),
-                'username': db_cfg.username or cfg['username'],
-                'password': db_cfg.password or cfg['password'],
-                'folder': 'INBOX',
-            })
-    except IntegrationConfig.DoesNotExist:
-        pass
-    except (ValueError, TypeError) as exc:
-        logger.warning("Invalid IMAP config in database: %s", exc)
-    return cfg
 
 
-def _extract_sender_email(msg):
-    _, sender = parseaddr(msg.get('From', ''))
-    return sender or 'unknown@example.com'
-
-
-def _looks_like_auto_reply(subject, msg):
-    lowered = (subject or '').lower()
-    if any(pattern in lowered for pattern in AUTO_REPLY_PATTERNS):
-        return True
-    auto_submitted = (msg.get('Auto-Submitted') or '').lower()
-    precedence = (msg.get('Precedence') or '').lower()
-    return auto_submitted not in ('', 'no') or precedence in ('bulk', 'junk', 'list')
+def decode_str(value):
+    if isinstance(value, bytes):
+        return value.decode('utf-8', errors='replace')
+    return value or ''
 
 
 def get_email_body(msg):
+    """Extract plain-text body. Falls back to best-effort text extraction."""
+    body = ''
     if msg.is_multipart():
-        parts = []
         for part in msg.walk():
-            ctype = part.get_content_type()
-            disposition = str(part.get('Content-Disposition') or '')
-            if ctype == 'text/plain' and 'attachment' not in disposition.lower():
-                payload = part.get_payload(decode=True) or b''
-                charset = part.get_content_charset() or 'utf-8'
-                parts.append(payload.decode(charset, errors='replace'))
-        return '\n'.join([p.strip() for p in parts if p.strip()]).strip()
-    payload = msg.get_payload(decode=True) or b''
-    charset = msg.get_content_charset() or 'utf-8'
-    return payload.decode(charset, errors='replace').strip()
+            ct = part.get_content_type()
+            if ct == 'text/plain' and not part.get_filename():
+                payload = part.get_payload(decode=True)
+                if payload:
+                    body += payload.decode('utf-8', errors='replace')
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            body = payload.decode('utf-8', errors='replace')
+    return body.strip()
 
 
 def get_attachments(msg):
+    """
+    Walk the email parts and return a list of dicts:
+    { 'filename': str, 'content_type': str, 'data': bytes }
+    Captures both explicit attachments and inline images with filenames.
+    """
     attachments = []
+    if not msg.is_multipart():
+        return attachments
     for part in msg.walk():
-        disposition = str(part.get('Content-Disposition') or '')
-        if 'attachment' not in disposition.lower():
+        filename_raw = part.get_filename()
+        if not filename_raw:
             continue
-        filename = part.get_filename()
-        if not filename:
-            continue
-        decoded_name = ''.join(
-            seg.decode(enc or 'utf-8', errors='replace') if isinstance(seg, bytes) else str(seg)
-            for seg, enc in decode_header(filename)
+        filename_parts = decode_header(filename_raw)
+        filename = ''.join(
+            p.decode(enc or 'utf-8') if isinstance(p, bytes) else p
+            for p, enc in filename_parts
         )
-        attachments.append({
-            'filename': decoded_name,
-            'content_type': part.get_content_type() or '',
-            'data': part.get_payload(decode=True) or b'',
-        })
+        content_type = part.get_content_type()
+        data = part.get_payload(decode=True)
+        if data:
+            attachments.append({
+                'filename': filename,
+                'content_type': content_type,
+                'data': data,
+            })
     return attachments
 
 
-def _decode_subject(msg):
-    subject_parts = decode_header(msg.get('Subject', 'No Subject'))
-    return ''.join(
-        part.decode(enc or 'utf-8', errors='replace') if isinstance(part, bytes) else str(part)
-        for part, enc in subject_parts
-    ).strip() or 'No Subject'
+def _looks_like_auto_reply(subject: str, msg) -> bool:
+    subject_l = (subject or '').strip().lower()
+    if any(p in subject_l for p in AUTO_REPLY_PATTERNS):
+        return True
+    auto_submitted = (msg.get('Auto-Submitted') or '').lower()
+    precedence = (msg.get('Precedence') or '').lower()
+    if auto_submitted and auto_submitted != 'no':
+        return True
+    if precedence in ('bulk', 'auto_reply', 'junk', 'list'):
+        return True
+    return False
+
+
+def _extract_sender_email(msg):
+    sender = msg.get('From', 'unknown@unknown.com')
+    match = re.search(r'<([^>]+)>', sender)
+    return (match.group(1) if match else sender).strip()
 
 
 def fetch_and_create_tickets():
@@ -129,7 +137,7 @@ def fetch_and_create_tickets():
     created = 0
     cfg = _get_imap_config()
     if not cfg['host'] or not cfg['username'] or not cfg['password']:
-        logger.info('[Email Ingestion] IMAP is not configured; skipping fetch.')
+        print('[Email Ingestion] IMAP is not configured; skipping fetch.')
         return 0
 
     try:
@@ -139,7 +147,7 @@ def fetch_and_create_tickets():
 
         status, message_ids = mail.search(None, 'UNSEEN')
         if status != 'OK':
-            logger.warning("[Email Ingestion Error] IMAP search failed: %s", status)
+            print(f"[Email Ingestion Error] IMAP search failed: {status}")
             mail.logout()
             return 0
 
@@ -147,46 +155,44 @@ def fetch_and_create_tickets():
             try:
                 fetch_status, msg_data = mail.fetch(msg_id, '(RFC822)')
                 if fetch_status != 'OK' or not msg_data or not msg_data[0]:
-                    logger.warning("[Email Parse Error] msg_id=%s: fetch failed", msg_id)
+                    print(f"[Email Parse Error] msg_id={msg_id}: fetch failed")
                     continue
 
                 raw = msg_data[0][1]
                 msg = email.message_from_bytes(raw)
-                title = _decode_subject(msg)
+
+                subject_parts = decode_header(msg.get('Subject', 'No Subject'))
+                title = ''.join(
+                    part.decode(enc or 'utf-8', errors='replace') if isinstance(part, bytes) else str(part)
+                    for part, enc in subject_parts
+                ).strip() or 'No Subject'
 
                 if _looks_like_auto_reply(title, msg):
-                    mail.store(msg_id, '+FLAGS', '\\Seen')
+                    mail.store(msg_id, '+FLAGS', '\Seen')
                     continue
 
                 user_email = _extract_sender_email(msg)
                 body = get_email_body(msg) or '(No body)'
-                message_id = (msg.get('Message-ID') or '').strip()
-
-                if message_id and Ticket.objects.filter(external_message_id=message_id).exists():
-                    logger.info("Skipping duplicate inbound email with Message-ID %s", message_id)
-                    mail.store(msg_id, '+FLAGS', '\\Seen')
-                    continue
 
                 result = classify(title, body)
 
-                with transaction.atomic():
-                    ticket = Ticket.objects.create(
-                        title=title,
-                        description=body,
-                        user_email=user_email,
-                        category=result.get('category', 'other'),
-                        subcategory=result.get('subcategory', ''),
-                        item=result.get('item', ''),
-                        priority=result.get('priority', 'medium'),
-                        required_level=result.get('level', 'associate'),
-                        sla_hours=result.get('sla_hours', 24),
-                        channel='email',
-                        raw_email=raw.decode('utf-8', errors='replace'),
-                        external_message_id=message_id[:255],
-                    )
-                    TicketEvent.objects.create(ticket=ticket, actor=None, event_type='created', to_status=ticket.status, note='Ticket created from inbound email.')
+                ticket = Ticket.objects.create(
+                    title=title,
+                    description=body,
+                    user_email=user_email,
+                    category=result.get('category', 'other'),
+                    subcategory=result.get('subcategory', ''),
+                    item=result.get('item', ''),
+                    priority=result.get('priority', 'medium'),
+                    required_level=result.get('level', 'associate'),
+                    sla_hours=result.get('sla_hours', 24),
+                    channel='email',
+                    raw_email=raw.decode('utf-8', errors='replace'),
+                )
 
-                    for att in get_attachments(msg):
+                # Save attachments before assign/notify so ticket detail is complete.
+                for att in get_attachments(msg):
+                    try:
                         cf = ContentFile(att['data'], name=att['filename'])
                         TicketAttachment.objects.create(
                             ticket=ticket,
@@ -195,24 +201,29 @@ def fetch_and_create_tickets():
                             content_type=att['content_type'],
                             source='email',
                         )
+                    except Exception as att_err:
+                        print(f"[Attachment Save Error] {att_err}")
 
+                try:
                     assignee = auto_assign(ticket)
                     if assignee:
                         ticket.assigned_to = assignee
                         ticket.save(update_fields=['assigned_to'])
-                        TicketEvent.objects.create(ticket=ticket, actor=assignee, event_type='assigned', from_status=ticket.status, to_status=ticket.status, note=f'Auto-assigned to {assignee.get_full_name() or assignee.username}.')
+                except Exception as assign_err:
+                    print(f"[Auto Assign Warning] Ticket {ticket.pk}: {assign_err}")
 
                 notify_ticket_received(ticket)
-                mail.store(msg_id, '+FLAGS', '\\Seen')
+
+                mail.store(msg_id, '+FLAGS', '\Seen')
                 created += 1
 
-            except (ValueError, TypeError, imaplib.IMAP4.error) as msg_err:
-                logger.warning("[Email Parse Error] msg_id=%s: %s", msg_id, msg_err, exc_info=True)
+            except Exception as msg_err:
+                print(f"[Email Parse Error] msg_id={msg_id}: {msg_err}")
                 continue
 
         mail.logout()
 
-    except (imaplib.IMAP4.error, OSError) as exc:
-        logger.warning("[Email Ingestion Error] %s", exc, exc_info=True)
+    except Exception as e:
+        print(f"[Email Ingestion Error] {e}")
 
     return created
