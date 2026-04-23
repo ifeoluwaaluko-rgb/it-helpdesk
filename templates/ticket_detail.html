@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ticket_time %}
 {% block title %}#{{ ticket.id }} {{ ticket.title }}{% endblock %}
 {% block breadcrumb %}<a href="{% url 'ticket_list' %}" class="hover:text-[#1f73b7]">Tickets</a> <span class="mx-1">/</span> #{{ ticket.id }}{% endblock %}
 {% block content %}
@@ -220,6 +221,25 @@
     </div>
     {% endif %}
 
+
+<div class="zd-card p-4">
+  <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Activity</h3>
+  <div class="space-y-3">
+    {% for event in activity_events %}
+    <div class="border-b border-[#e9ebed] pb-2 last:border-b-0 last:pb-0">
+      <div class="flex items-center justify-between gap-2">
+        <p class="text-xs font-medium text-[#2f3941]">{{ event.get_action_display }}</p>
+        <span class="text-[11px] text-[#68737d]">{{ event.created_at|date:"M d, H:i" }}</span>
+      </div>
+      <p class="text-xs text-[#68737d] mt-1">{{ event.message }}</p>
+      {% if event.actor %}<p class="text-[11px] text-[#1f73b7] mt-1">By {{ event.actor.get_full_name|default:event.actor.username }}</p>{% endif %}
+    </div>
+    {% empty %}
+    <p class="text-xs text-[#68737d]">No activity yet.</p>
+    {% endfor %}
+  </div>
+</div>
+
     <!-- Metadata -->
     <div class="zd-card p-4">
       <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Details</h3>
@@ -228,7 +248,7 @@
         <div class="flex justify-between"><dt class="text-[#68737d]">Channel</dt><dd>{{ ticket.get_channel_display }}</dd></div>
         <div class="flex justify-between"><dt class="text-[#68737d]">Required Level</dt><dd class="capitalize">{{ ticket.required_level }}</dd></div>
         <div class="flex justify-between"><dt class="text-[#68737d]">SLA Target</dt><dd>{{ ticket.sla_hours }}h</dd></div>
-        {% if ticket.first_response_at %}<div class="flex justify-between"><dt class="text-[#68737d]">First Response</dt><dd class="font-semibold">{{ ticket.first_response_at|date:"M d, H:i" }}</dd></div><div class="flex justify-between"><dt class="text-[#68737d]">FRT</dt><dd class="text-cyan-700 font-semibold">{{ ticket.first_response_minutes }}m</dd></div>{% endif %}{% if ticket.resolution_time_hours %}<div class="flex justify-between"><dt class="text-[#68737d]">Resolved In</dt><dd class="text-green-600 font-semibold">{{ ticket.resolution_time_hours }}h</dd></div>{% endif %}
+        {% if ticket.first_response_at %}<div class="flex justify-between"><dt class="text-[#68737d]">First Response</dt><dd class="font-semibold">{{ ticket.first_response_at|date:"M d, H:i" }}</dd></div><div class="flex justify-between"><dt class="text-[#68737d]">FRT</dt><dd class="text-cyan-700 font-semibold">{{ ticket.first_response_minutes|duration_from_minutes }}</dd></div>{% endif %}{% if ticket.resolution_time_hours %}<div class="flex justify-between"><dt class="text-[#68737d]">Resolved In</dt><dd class="text-green-600 font-semibold">{{ ticket.resolution_time_hours|duration_from_hours }}</dd></div>{% endif %}
         <div class="flex justify-between"><dt class="text-[#68737d]">Created</dt><dd>{{ ticket.created_at|date:"M d, Y" }}</dd></div>
         <div class="flex justify-between"><dt class="text-[#68737d]">Updated</dt><dd>{{ ticket.updated_at|date:"M d, H:i" }}</dd></div>
       </dl>
@@ -262,6 +282,17 @@ function loadItems(sub) {
 // Init
 loadSubcategories('{{ ticket.category }}', '{{ ticket.subcategory }}');
 
+function humanizeSeconds(totalSeconds) {
+  totalSeconds = Math.max(parseInt(totalSeconds || 0, 10), 0);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
 // SLA countdown
 const remaining = {{ ticket.sla_remaining_seconds }};
 const el = document.getElementById('sla-countdown');
@@ -270,8 +301,7 @@ if (el && remaining > 0) {
   function tick() {
     const left = remaining - Math.floor((Date.now()-start)/1000);
     if (left <= 0) { el.textContent = 'Deadline has passed'; el.className = 'text-xs text-red-500 font-semibold mt-1'; return; }
-    const h = Math.floor(left/3600), m = Math.floor((left%3600)/60), s = left%60;
-    el.textContent = `${h}h ${m}m ${s}s remaining`;
+    el.textContent = `${humanizeSeconds(left)} remaining`;
     if (left < 3600) el.className = 'text-xs text-orange-500 font-semibold mt-1';
     setTimeout(tick, 1000);
   }

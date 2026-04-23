@@ -1,3 +1,6 @@
 #!/bin/bash
 set -e
-exec python manage.py fetch_emails --loop --sleep ${EMAIL_POLL_SECONDS:-15}
+while true; do
+  python manage.py fetch_emails || true
+  sleep ${EMAIL_POLL_SECONDS:-30}
+done

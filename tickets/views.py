@@ -4,17 +4,17 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Avg
 from django.contrib import messages
 from django.http import JsonResponse, Http404
-from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment
+from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment, TicketEvent
 from .classifier import classify, CATEGORY_TREE
 from .assignment import auto_assign
 from .notifications import notify_assignment, notify_status_change, notify_ticket_received
 from knowledge.models import Article
 import json
 import re
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,27 @@ def _mark_first_response(ticket):
         ticket.first_response_at = timezone.now()
         ticket.save(update_fields=['first_response_at', 'updated_at'])
 
+
+
+
+def _log_ticket_event(ticket, action, actor=None, message=''):
+    try:
+        TicketEvent.objects.create(ticket=ticket, actor=actor, action=action, message=message[:255])
+    except Exception:
+        logger.exception('Ticket event log failed')
+
+def _normalize_chart_day(day_value):
+    if isinstance(day_value, datetime):
+        return day_value.date()
+    if hasattr(day_value, 'date'):
+        return day_value.date()
+    if isinstance(day_value, str):
+        for fmt in ('%Y-%m-%d', '%b %d'):
+            try:
+                return datetime.strptime(day_value, fmt).date()
+            except ValueError:
+                continue
+    return day_value
 
 def _normalize_issue_signature(ticket):
     title = re.sub(r'[^a-z0-9\s]', ' ', (ticket.title or '').lower())
@@ -138,47 +159,65 @@ def dashboard(request):
     is_consultant = role in ('consultant', 'senior')
 
     all_tickets = Ticket.objects.select_related('assigned_to').all()
-    my_tickets = all_tickets.filter(assigned_to=user).exclude(status__in=['resolved','closed'])
-    unassigned = all_tickets.filter(assigned_to__isnull=True, status__in=['open'])
+    active_statuses = ['open', 'in_progress', 'pending']
+    my_tickets = all_tickets.filter(assigned_to=user).exclude(status__in=['resolved', 'closed'])
+    unassigned = all_tickets.filter(assigned_to__isnull=True, status='open')
 
-    total = all_tickets.count()
-    open_count = all_tickets.filter(status='open').count()
-    in_progress = all_tickets.filter(status='in_progress').count()
-    resolved_count = all_tickets.filter(status='resolved').count()
-    sla_breached_ids = [t.id for t in all_tickets.filter(status__in=['open','in_progress','pending']) if t.is_sla_breached]
+    counts = all_tickets.aggregate(
+        total=Count('id'),
+        open=Count('id', filter=Q(status='open')),
+        in_progress=Count('id', filter=Q(status='in_progress')),
+        resolved=Count('id', filter=Q(status='resolved')),
+        unassigned=Count('id', filter=Q(assigned_to__isnull=True, status='open')),
+    )
+    total = counts['total'] or 0
+    open_count = counts['open'] or 0
+    in_progress = counts['in_progress'] or 0
+    resolved_count = counts['resolved'] or 0
 
-    closed = all_tickets.filter(status__in=['resolved','closed'])
+    active_tickets = list(all_tickets.filter(status__in=active_statuses))
+    sla_breached_ids = [t.id for t in active_tickets if t.is_sla_breached]
+
+    closed = list(all_tickets.filter(status__in=['resolved', 'closed']))
     sla_ok = sum(1 for t in closed if t.resolved_at and t.resolved_at <= t.sla_deadline)
-    sla_compliance = round((sla_ok / closed.count()) * 100) if closed.exists() else 100
+    sla_compliance = round((sla_ok / len(closed)) * 100) if closed else 100
 
-    resolved_tickets = all_tickets.filter(resolved_at__isnull=False)
-    times = [t.resolution_time_hours for t in resolved_tickets if t.resolution_time_hours]
-    avg_resolution = round(sum(times)/len(times), 1) if times else 0
+    resolved_tickets = list(all_tickets.filter(resolved_at__isnull=False))
+    times = [t.resolution_time_hours for t in resolved_tickets if t.resolution_time_hours is not None]
+    avg_resolution = round(sum(times) / len(times), 1) if times else 0
 
     today = date.today()
-    chart_labels, chart_data = [], []
-    for i in range(6, -1, -1):
-        day = today - timedelta(days=i)
-        chart_labels.append(day.strftime('%b %d'))
-        chart_data.append(all_tickets.filter(created_at__date=day).count())
+    chart_labels = [(today - timedelta(days=i)).strftime('%b %d') for i in range(6, -1, -1)]
+    day_buckets = {today - timedelta(days=i): 0 for i in range(6, -1, -1)}
+    chart_rows = (
+        all_tickets.filter(created_at__date__gte=today - timedelta(days=6))
+        .extra(select={'day': "date(created_at)"})
+        .values('day')
+        .annotate(count=Count('id'))
+        .order_by('day')
+    )
+    for row in chart_rows:
+        day_key = _normalize_chart_day(row['day'])
+        if day_key in day_buckets:
+            day_buckets[day_key] = row['count']
+    chart_data = [day_buckets[today - timedelta(days=i)] for i in range(6, -1, -1)]
 
-    category_counts = all_tickets.values('category').annotate(count=Count('id')).order_by('-count')
+    category_counts = list(all_tickets.values('category').annotate(count=Count('id')).order_by('-count'))
 
     cat_resolution = {}
     for cat, _ in Ticket.CATEGORY_CHOICES:
-        cat_tickets = resolved_tickets.filter(category=cat)
-        if cat_tickets.exists():
-            t2 = [t.resolution_time_hours for t in cat_tickets if t.resolution_time_hours]
-            if t2: cat_resolution[cat] = round(sum(t2)/len(t2), 1)
+        cat_tickets = [t for t in resolved_tickets if t.category == cat and t.resolution_time_hours is not None]
+        if cat_tickets:
+            cat_resolution[cat] = round(sum(t.resolution_time_hours for t in cat_tickets) / len(cat_tickets), 1)
 
     staff_workload = []
     if is_manager:
         staff = User.objects.filter(is_staff=True).annotate(
-            open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open','in_progress']))
+            open_count=Count('assigned_tickets', filter=Q(assigned_tickets__status__in=['open', 'in_progress']))
         ).order_by('-open_count')
         staff_workload = list(staff)
 
-    my_resolved = all_tickets.filter(assigned_to=user, status__in=['resolved','closed']).count()
+    my_resolved = all_tickets.filter(assigned_to=user, status__in=['resolved', 'closed']).count()
     my_total_assigned = all_tickets.filter(assigned_to=user).count()
     my_productivity = round((my_resolved / my_total_assigned) * 100) if my_total_assigned > 0 else 0
 
@@ -188,9 +227,9 @@ def dashboard(request):
     recurring_issues = _get_recurring_issue_summary() if is_manager else []
 
     kpis = [
-        (open_count,            'Open',        'text-[#1f73b7]', ''),
-        (in_progress,           'In Progress', 'text-[#f79a3e]', ''),
-        (resolved_count,        'Resolved',    'text-green-600', ''),
+        (open_count, 'Open', 'text-[#1f73b7]', ''),
+        (in_progress, 'In Progress', 'text-[#f79a3e]', ''),
+        (resolved_count, 'Resolved', 'text-green-600', ''),
         (len(sla_breached_ids), 'SLA Breached', 'text-red-500' if sla_breached_ids else 'text-[#68737d]', ''),
     ]
 
@@ -202,9 +241,13 @@ def dashboard(request):
         'is_consultant': is_consultant,
         'role': role,
         'stats': {
-            'total': total, 'open': open_count, 'in_progress': in_progress,
-            'resolved': resolved_count, 'sla_breached': len(sla_breached_ids),
-            'unassigned': unassigned.count(), 'sla_compliance': sla_compliance,
+            'total': total,
+            'open': open_count,
+            'in_progress': in_progress,
+            'resolved': resolved_count,
+            'sla_breached': len(sla_breached_ids),
+            'unassigned': counts['unassigned'] or 0,
+            'sla_compliance': sla_compliance,
             'avg_resolution': avg_resolution,
             'avg_first_response': avg_first_response,
         },
@@ -216,9 +259,8 @@ def dashboard(request):
         'chart_labels': json.dumps(chart_labels),
         'chart_data': json.dumps(chart_data),
         'cat_resolution': cat_resolution,
-        'my_productivity': my_productivity,
         'my_resolved': my_resolved,
-        'my_total_assigned': my_total_assigned,
+        'my_productivity': my_productivity,
         'recurring_issues': recurring_issues,
     }
     return render(request, 'dashboard.html', context)
@@ -268,6 +310,8 @@ def ticket_detail(request, pk):
             if body:
                 TicketComment.objects.create(ticket=ticket, author=request.user, body=body)
                 _mark_first_response(ticket)
+                _log_ticket_event(ticket, 'commented', request.user, 'Internal note added')
+                messages.success(request, 'Note added.')
 
         elif action == 'pickup' and not ticket.assigned_to:
             ticket.assigned_to = request.user
@@ -275,6 +319,7 @@ def ticket_detail(request, pk):
             ticket.save()
             _mark_first_response(ticket)
             notify_assignment(ticket, request.user)
+            _log_ticket_event(ticket, 'picked_up', request.user, f'Picked up by {request.user.get_full_name() or request.user.username}')
             messages.success(request, f'You picked up ticket #{ticket.id}.')
 
         elif action == 'update_status':
@@ -290,6 +335,11 @@ def ticket_detail(request, pk):
                     _mark_first_response(ticket)
                 if new_status != old_status:
                     notify_status_change(ticket, request.user)
+                    message = f'Status changed from {old_status} to {new_status}'
+                    if new_status == 'resolved':
+                        message = f'Resolved by {request.user.get_full_name() or request.user.username}'
+                    _log_ticket_event(ticket, 'status_changed', request.user, message)
+                    messages.success(request, 'Ticket status updated.')
 
         elif action == 'reassign' and can_assign(request.user):
             uid = request.POST.get('user_id', '').strip()
@@ -302,6 +352,14 @@ def ticket_detail(request, pk):
                     if ticket.assigned_to and (not old or old.id != ticket.assigned_to.id):
                         notify_assignment(ticket, ticket.assigned_to)
                         _mark_first_response(ticket)
+                        if old:
+                            _log_ticket_event(ticket, 'reassigned', request.user, f'Reassigned from {old.get_full_name() or old.username} to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}')
+                            messages.success(request, f'Ticket reassigned from {old.get_full_name() or old.username} to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}.')
+                        else:
+                            _log_ticket_event(ticket, 'reassigned', request.user, f'Assigned to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}')
+                            messages.success(request, f'Ticket assigned to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}.')
+                    else:
+                        messages.info(request, 'Ticket assignee is unchanged.')
                 except (ValueError, User.DoesNotExist):
                     messages.error(request, 'Invalid staff selection.')
 
@@ -318,6 +376,7 @@ def ticket_detail(request, pk):
             ticket.subcategory = request.POST.get('subcategory', '')
             ticket.item = request.POST.get('item', '')
             ticket.save()
+            _log_ticket_event(ticket, 'category_updated', request.user, f'Category updated to {ticket.category_display}')
             messages.success(request, 'Category updated.')
 
         return redirect('ticket_detail', pk=pk)
@@ -326,6 +385,7 @@ def ticket_detail(request, pk):
 
     return render(request, 'ticket_detail.html', {
         'ticket': ticket,
+        'activity_events': ticket.events.select_related('actor').all()[:12],
         'comments': comments,
         'related_articles': related_articles,
         'staff_users': staff_users,
@@ -463,6 +523,7 @@ def create_ticket(request):
                             source='manual',
                         )
 
+                _log_ticket_event(ticket, 'created', request.user, 'Ticket created manually')
                 notify_ticket_received(ticket)
 
                 try:
@@ -471,6 +532,7 @@ def create_ticket(request):
                         ticket.assigned_to = assignee
                         ticket.save()
                         notify_assignment(ticket, assignee)
+                        _log_ticket_event(ticket, 'reassigned', assignee, f'Auto-assigned to {assignee.get_full_name() or assignee.username}')
                 except Exception:
                     pass
                 messages.success(request, f'Ticket #{ticket.id} created.')
@@ -500,9 +562,9 @@ def live_dashboard(request):
     in_progress_t = all_tickets.filter(status='in_progress').count()
     resolved_t = all_tickets.filter(status='resolved').count()
     total = all_tickets.count()
-    closed = all_tickets.filter(status__in=['resolved','closed'])
+    closed = list(all_tickets.filter(status__in=['resolved', 'closed']))
     sla_ok = sum(1 for t in closed if t.resolved_at and t.resolved_at <= t.sla_deadline)
-    sla_compliance = round((sla_ok/closed.count())*100) if closed.exists() else 100
+    sla_compliance = round((sla_ok/len(closed))*100) if closed else 100
     times = [t.resolution_time_hours for t in all_tickets.filter(resolved_at__isnull=False) if t.resolution_time_hours]
     avg_resolution = round(sum(times)/len(times),1) if times else 0
     total_assigned = all_tickets.exclude(assigned_to__isnull=True).count()

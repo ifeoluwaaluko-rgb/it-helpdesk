@@ -1,7 +1,10 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard — IT Helpdesk{% endblock %}
+{% load ticket_time %}
+{% block title %}Dashboard — IT Helpdesk</div>
+{% endblock %}
 {% block breadcrumb %}Dashboard{% endblock %}
 {% block content %}
+<div id="dashboard-live-region">
 
 {% if is_manager %}
 <!-- ══ MANAGER VIEW ══ -->
@@ -34,14 +37,14 @@
     <div class="w-9 h-9 rounded bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
     </div>
-    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_resolution }}h</p><p class="text-xs text-[#68737d]">Avg Resolution</p></div>
+    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_resolution|duration_from_hours }}</p><p class="text-xs text-[#68737d]">Avg Resolution</p></div>
   </div>
 
   <div class="zd-card p-4 flex items-center gap-3">
     <div class="w-9 h-9 rounded bg-cyan-100 flex items-center justify-center text-cyan-700 flex-shrink-0">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
     </div>
-    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_first_response }}m</p><p class="text-xs text-[#68737d]">Avg First Response</p></div>
+    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_first_response|duration_from_minutes }}</p><p class="text-xs text-[#68737d]">Avg First Response</p></div>
   </div>
   <div class="zd-card p-4 flex items-center gap-3">
     <div class="w-9 h-9 rounded {% if stats.unassigned > 0 %}bg-orange-100{% else %}bg-gray-100{% endif %} flex items-center justify-center {% if stats.unassigned > 0 %}text-orange-500{% else %}text-gray-500{% endif %} flex-shrink-0">
@@ -113,7 +116,7 @@
             <p class="text-xs text-[#2f3941] font-medium truncate">{{ s.get_full_name|default:s.username }}</p>
             <span class="text-xs font-bold ml-2 {% if s.open_count > 5 %}text-red-500{% elif s.open_count > 2 %}text-orange-500{% else %}text-green-600{% endif %}">{{ s.open_count }}</span>
           </div>
-          <div class="h-1.5 bg-gray-100 rounded-full"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:{% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%"></div></div>
+          <div class="h-1.5 bg-gray-100 rounded-full"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:min({% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%,100%)"></div></div>
         </div>
       </div>
       {% endfor %}

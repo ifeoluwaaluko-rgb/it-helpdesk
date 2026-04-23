@@ -74,6 +74,7 @@ class Ticket(models.Model):
     sla_paused_at = models.DateTimeField(null=True, blank=True)
     sla_pause_seconds = models.IntegerField(default=0)
     raw_email = models.TextField(blank=True)
+    external_message_id = models.CharField(max_length=500, blank=True, db_index=True)
     sla_hours = models.IntegerField(default=24)
     merged_into = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='merged_tickets'
@@ -137,6 +138,29 @@ class Ticket(models.Model):
         return ' → '.join(parts)
 
     class Meta: ordering = ['-created_at']
+
+
+
+class TicketEvent(models.Model):
+    ACTION_CHOICES = [
+        ('created', 'Created'),
+        ('commented', 'Commented'),
+        ('picked_up', 'Picked Up'),
+        ('status_changed', 'Status Changed'),
+        ('reassigned', 'Reassigned'),
+        ('category_updated', 'Category Updated'),
+    ]
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name='events')
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=30, choices=ACTION_CHOICES)
+    message = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Ticket #{self.ticket_id} {self.action}"
 
 
 class TicketEditHistory(models.Model):
