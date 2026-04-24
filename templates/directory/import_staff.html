@@ -2,17 +2,26 @@
 {% block title %}Import Staff{% endblock %}
 {% block content %}
 <div class="max-w-xl mx-auto">
-  <div class="mb-5"><a href="{% url 'staff_list' %}" class="text-sm text-gray-400">← Directory</a><h1 class="text-xl font-bold text-gray-900 mt-2">Import Staff via CSV</h1></div>
+  <div class="mb-5">
+    <a href="{% url 'staff_list' %}" class="text-sm text-gray-400 hover:text-blue-600">Back to Directory</a>
+    <h1 class="text-xl font-bold text-gray-900 mt-2">Import Staff via CSV</h1>
+  </div>
   <div class="zd-card p-5">
     <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-5 text-sm text-blue-700">
-      <p class="font-semibold mb-1">📋 CSV Format Required:</p>
+      <p class="font-semibold mb-1">CSV format required:</p>
       <code class="text-xs">first_name, last_name, email, phone, department, job_title</code><br>
-      <a href="{% url 'staff_template' %}" class="underline mt-2 inline-block">⬇ Download template</a>
+      <a href="{% url 'staff_template' %}" class="underline mt-2 inline-block">Download template</a>
     </div>
     <form method="post" enctype="multipart/form-data" class="space-y-4">
       {% csrf_token %}
-      <div><label class="block text-sm font-medium text-gray-700 mb-1.5">Upload CSV File</label><input type="file" name="file" accept=".csv" required class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm"></div>
-      <div class="flex gap-3"><button type="submit" class="zd-btn zd-btn-primary">Import</button><a href="{% url 'staff_list' %}" class="zd-btn zd-btn-secondary">Cancel</a></div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5" for="{{ form.file.id_for_label }}">Upload CSV File</label>
+        <input id="{{ form.file.id_for_label }}" type="file" name="file" accept=".csv" required class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm">
+      </div>
+      <div class="flex gap-3">
+        <button type="submit" class="zd-btn zd-btn-primary">Import</button>
+        <a href="{% url 'staff_list' %}" class="zd-btn zd-btn-secondary">Cancel</a>
+      </div>
     </form>
   </div>
 </div>

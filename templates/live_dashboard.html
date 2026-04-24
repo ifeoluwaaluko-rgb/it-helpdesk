@@ -1,11 +1,10 @@
-{% load ticket_time %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="refresh" content="30">
-<title>IT Helpdesk — Live View</title>
+<title>IT Helpdesk - Live View</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   body{background:#0f172a;color:white;font-family:'Inter',sans-serif;}
@@ -23,10 +22,9 @@
 <body class="min-h-screen p-8">
 
 <div class="max-w-7xl mx-auto">
-  <!-- Header -->
   <div class="flex items-center justify-between mb-10">
     <div>
-      <h1 class="text-3xl font-black tracking-tight">🖥️ IT HELPDESK</h1>
+      <h1 class="text-3xl font-black tracking-tight">IT HELPDESK</h1>
       <p class="text-sm opacity-40 mt-1">LIVE OPERATIONS CENTRE</p>
     </div>
     <div class="text-right">
@@ -35,7 +33,6 @@
     </div>
   </div>
 
-  <!-- Big metrics row -->
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
     <div class="metric">
       <div class="metric-value blue">{{ open }}</div>
@@ -55,7 +52,6 @@
     </div>
   </div>
 
-  <!-- Secondary metrics -->
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
     <div class="metric">
       <div class="text-5xl font-black {% if sla_compliance >= 90 %}green{% elif sla_compliance >= 70 %}yellow{% else %}red{% endif %}">{{ sla_compliance }}%</div>
@@ -63,7 +59,7 @@
       <div class="mt-3 h-2 bg-white/10 rounded-full"><div class="h-2 rounded-full {% if sla_compliance >= 90 %}bg-green-400{% elif sla_compliance >= 70 %}bg-yellow-400{% else %}bg-red-400{% endif %}" style="width:{{ sla_compliance }}%"></div></div>
     </div>
     <div class="metric">
-      <div class="text-5xl font-black blue">{{ avg_resolution|human_duration }}</div>
+      <div class="text-5xl font-black blue">{{ avg_resolution }}h</div>
       <div class="metric-label">Avg Resolution</div>
     </div>
     <div class="metric">
@@ -76,7 +72,6 @@
     </div>
   </div>
 
-  <!-- Active Agents -->
   <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:1.5rem;padding:2rem;">
     <h2 class="text-sm font-bold uppercase tracking-widest opacity-40 mb-5">Active Agents</h2>
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

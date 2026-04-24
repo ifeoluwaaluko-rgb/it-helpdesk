@@ -7,5 +7,4 @@ urlpatterns = [
     path('directory/template/', views.download_template, name='staff_template'),
     path('directory/<int:pk>/', views.staff_detail, name='staff_detail'),
     path('directory/<int:pk>/edit/', views.staff_edit, name='staff_edit'),
-    path('api/staff/search/', views.staff_search_api, name='staff_search_api'),
 ]
