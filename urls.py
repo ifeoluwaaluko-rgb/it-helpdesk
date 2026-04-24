@@ -1,21 +1,8 @@
-from django.contrib import admin
-from django.urls import path, include
-from django.shortcuts import redirect
+"""
+Compatibility shim.
 
-def home_redirect(request):
-    if request.user.is_authenticated:
-        return redirect('dashboard')
-    return redirect('login')
+The canonical Django URLConf is `helpdesk.urls`.
+This file exists only to avoid breaking older imports or scripts.
+"""
 
-urlpatterns = [
-    path('admin/', admin.site.urls),
-
-    # Smart homepage
-    path('', home_redirect),
-
-    # App routes
-    path('', include('tickets.urls')),
-    path('', include('knowledge.urls')),
-    path('', include('directory.urls')),
-    path('', include('assets.urls')),
-]
+from helpdesk.urls import *  # noqa: F401,F403

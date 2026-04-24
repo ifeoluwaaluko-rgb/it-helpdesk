@@ -189,4 +189,3 @@ LOGGING = {
         },
     },
 }
-EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '5'))

@@ -24,16 +24,16 @@
       <div><label class="zd-label">Port</label><input name="port" type="number" value="{{ configs.email_smtp.port|default:'465' }}" class="zd-input"></div>
       <div><label class="zd-label">Username</label><input name="username" value="{{ configs.email_smtp.username }}" class="zd-input" placeholder="it@company.com"></div>
       <div><label class="zd-label">Password / App Password</label><input name="password" type="password" class="zd-input" placeholder="{{ configs.email_smtp.masked_password }}"></div>
-      <div class="sm:col-span-2 flex items-center gap-6 flex-wrap">
-        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="use_tls" {% if configs.email_smtp.use_tls and configs.email_smtp.port != 465 %}checked{% endif %}> Use TLS (587)</label>
-        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="use_ssl" {% if configs.email_smtp.port == 465 and not configs.email_smtp.use_tls %}checked{% endif %}> Use SSL (465)</label>
-        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" {% if configs.email_smtp.is_active %}checked{% endif %}> Active</label>
+      <div class="sm:col-span-2 space-y-2">
+        <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" name="use_tls" {% if configs.email_smtp.use_tls %}checked{% endif %}> Use TLS (port 587 — standard)</label>
+        <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" name="use_ssl" {% if configs.email_smtp.use_ssl %}checked{% endif %}> Use SSL (port 465 — required on Railway)</label>
+        <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" name="is_active" {% if configs.email_smtp.is_active %}checked{% endif %}> Enable this integration</label>
       </div>
       <div class="sm:col-span-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-        Railway often blocks port 587. For Gmail on Railway, use <strong>port 465 + SSL</strong> with a Google App Password.
+        ⚠️ Railway blocks port 587. Use <strong>port 465 + SSL</strong> with a Google App Password (not your main Gmail password).
       </div>
       <div class="sm:col-span-2 pt-2">
-        <button class="zd-btn zd-btn-primary">Save</button>
+        <button class="zd-btn zd-btn-primary">Save SMTP Settings</button>
       </div>
     </form>
   </div>
