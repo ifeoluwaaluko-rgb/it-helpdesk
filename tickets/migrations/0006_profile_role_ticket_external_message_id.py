@@ -1,6 +1,40 @@
 from django.db import migrations, models
 
 
+def sync_external_message_id(apps, schema_editor):
+    connection = schema_editor.connection
+    table_name = "tickets_ticket"
+    with connection.cursor() as cursor:
+        description = connection.introspection.get_table_description(cursor, table_name)
+    column_names = {column.name for column in description}
+
+    if "external_message_id" not in column_names:
+        schema_editor.execute(
+            "ALTER TABLE tickets_ticket "
+            "ADD COLUMN external_message_id varchar(255) NOT NULL DEFAULT '';"
+        )
+        return
+
+    if connection.vendor == "postgresql":
+        schema_editor.execute(
+            "UPDATE tickets_ticket "
+            "SET external_message_id = '' "
+            "WHERE external_message_id IS NULL;"
+        )
+        schema_editor.execute(
+            "ALTER TABLE tickets_ticket "
+            "ALTER COLUMN external_message_id SET DEFAULT '';"
+        )
+        schema_editor.execute(
+            "ALTER TABLE tickets_ticket "
+            "ALTER COLUMN external_message_id SET NOT NULL;"
+        )
+
+
+def noop_reverse(apps, schema_editor):
+    return None
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -25,44 +59,7 @@ class Migration(migrations.Migration):
         ),
         migrations.SeparateDatabaseAndState(
             database_operations=[
-                migrations.RunSQL(
-                    sql=(
-                        "ALTER TABLE tickets_ticket "
-                        "ADD COLUMN IF NOT EXISTS external_message_id varchar(255);"
-                    ),
-                    reverse_sql=(
-                        "ALTER TABLE tickets_ticket "
-                        "DROP COLUMN IF EXISTS external_message_id;"
-                    ),
-                ),
-                migrations.RunSQL(
-                    sql=(
-                        "UPDATE tickets_ticket "
-                        "SET external_message_id = '' "
-                        "WHERE external_message_id IS NULL;"
-                    ),
-                    reverse_sql=migrations.RunSQL.noop,
-                ),
-                migrations.RunSQL(
-                    sql=(
-                        "ALTER TABLE tickets_ticket "
-                        "ALTER COLUMN external_message_id SET DEFAULT '';"
-                    ),
-                    reverse_sql=(
-                        "ALTER TABLE tickets_ticket "
-                        "ALTER COLUMN external_message_id DROP DEFAULT;"
-                    ),
-                ),
-                migrations.RunSQL(
-                    sql=(
-                        "ALTER TABLE tickets_ticket "
-                        "ALTER COLUMN external_message_id SET NOT NULL;"
-                    ),
-                    reverse_sql=(
-                        "ALTER TABLE tickets_ticket "
-                        "ALTER COLUMN external_message_id DROP NOT NULL;"
-                    ),
-                ),
+                migrations.RunPython(sync_external_message_id, noop_reverse),
             ],
             state_operations=[
                 migrations.AddField(
