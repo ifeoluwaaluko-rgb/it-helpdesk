@@ -75,6 +75,7 @@ class IntegrationConfig(models.Model):
     username    = models.CharField(max_length=255, blank=True,
                                    help_text='Email address / API user')
     use_tls     = models.BooleanField(default=True)
+    use_ssl     = models.BooleanField(default=False)
     webhook_url = models.CharField(max_length=500, blank=True,
                                    help_text='Webhook URL (Teams / Slack)')
     phone_number_id = models.CharField(max_length=50, blank=True,
