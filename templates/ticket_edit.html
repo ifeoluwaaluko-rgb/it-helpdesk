@@ -8,60 +8,54 @@
     <form method="post" class="space-y-4">
       {% csrf_token %}
       <div>
-        <label class="zd-label" for="{{ form.title.id_for_label }}">Title <span class="text-red-500">*</span></label>
-        <input id="{{ form.title.id_for_label }}" name="title" value="{{ form.title.value|default:'' }}" required class="zd-input">
+        <label class="zd-label">Title <span class="text-red-500">*</span></label>
+        <input name="title" value="{{ ticket.title }}" required class="zd-input">
       </div>
       <div>
-        <label class="zd-label" for="{{ form.description.id_for_label }}">Description <span class="text-red-500">*</span></label>
-        <textarea id="{{ form.description.id_for_label }}" name="description" rows="6" required class="zd-input resize-none">{{ form.description.value|default:'' }}</textarea>
+        <label class="zd-label">Description <span class="text-red-500">*</span></label>
+        <textarea name="description" rows="6" required class="zd-input resize-none">{{ ticket.description }}</textarea>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label class="zd-label" for="{{ form.category.id_for_label }}">Category</label>
+          <label class="zd-label">Category</label>
           <select name="category" id="cat-sel" class="zd-select" onchange="loadSubs(this.value)">
-            {% for val, label in category_choices %}
-            <option value="{{ val }}" {% if form.category.value == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
+            {% for val, label in category_choices %}<option value="{{ val }}" {% if ticket.category == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
           </select>
         </div>
         <div>
-          <label class="zd-label" for="{{ form.subcategory.id_for_label }}">Subcategory</label>
+          <label class="zd-label">Subcategory</label>
           <select name="subcategory" id="sub-sel" class="zd-select">
-            <option value="{{ form.subcategory.value|default:'' }}">{{ form.subcategory.value|default:"Select" }}</option>
+            <option value="{{ ticket.subcategory }}">{{ ticket.subcategory|default:"— Select —" }}</option>
           </select>
         </div>
         <div>
-          <label class="zd-label" for="{{ form.item.id_for_label }}">Item</label>
-          <input id="{{ form.item.id_for_label }}" name="item" value="{{ form.item.value|default:'' }}" class="zd-input" placeholder="e.g. Microsoft Teams">
+          <label class="zd-label">Item</label>
+          <input name="item" id="item-inp" value="{{ ticket.item }}" class="zd-input" placeholder="e.g. Microsoft Teams">
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="zd-label" for="{{ form.priority.id_for_label }}">Priority</label>
+          <label class="zd-label">Priority</label>
           <select name="priority" class="zd-select">
-            {% for val, label in priority_choices %}
-            <option value="{{ val }}" {% if form.priority.value == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
+            {% for val, label in priority_choices %}<option value="{{ val }}" {% if ticket.priority == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
           </select>
         </div>
         {% if can_edit_status %}
         <div>
-          <label class="zd-label" for="{{ form.status.id_for_label }}">Status</label>
+          <label class="zd-label">Status</label>
           <select name="status" class="zd-select">
-            {% for val, label in status_choices %}
-            <option value="{{ val }}" {% if form.status.value == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
+            {% for val, label in status_choices %}<option value="{{ val }}" {% if ticket.status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
           </select>
         </div>
         {% endif %}
       </div>
       <div>
-        <label class="zd-label" for="{{ form.tags.id_for_label }}">Tags <span class="text-[#68737d] font-normal">(comma-separated)</span></label>
-        <input id="{{ form.tags.id_for_label }}" name="tags" value="{{ form.tags.value|default:'' }}" class="zd-input" placeholder="vpn, windows, floor-2">
+        <label class="zd-label">Tags <span class="text-[#68737d] font-normal">(comma-separated)</span></label>
+        <input name="tags" value="{{ ticket.tags }}" class="zd-input" placeholder="vpn, windows, floor-2">
       </div>
       <div>
-        <label class="zd-label" for="{{ form.edit_note.id_for_label }}">Edit Note <span class="text-[#68737d] font-normal">(describe what you changed)</span></label>
-        <input id="{{ form.edit_note.id_for_label }}" name="edit_note" value="{{ form.edit_note.value|default:'' }}" class="zd-input" placeholder="e.g. Corrected category from hardware to software">
+        <label class="zd-label">Edit Note <span class="text-[#68737d] font-normal">(describe what you changed)</span></label>
+        <input name="edit_note" class="zd-input" placeholder="e.g. Corrected category from hardware to software">
       </div>
       <div class="flex gap-3 pt-2">
         <button type="submit" class="zd-btn zd-btn-primary">Save Changes</button>
@@ -74,7 +68,7 @@
 const tree = {{ category_tree_json|safe }};
 function loadSubs(cat, sel) {
   const s = document.getElementById('sub-sel');
-  s.innerHTML = '<option value="">Select</option>';
+  s.innerHTML = '<option value="">— Select —</option>';
   Object.keys(tree[cat]?.subcategories || {}).forEach(sub => {
     const o = document.createElement('option');
     o.value = sub; o.textContent = sub;
@@ -82,6 +76,6 @@ function loadSubs(cat, sel) {
     s.appendChild(o);
   });
 }
-loadSubs('{{ form.category.value|default:ticket.category|escapejs }}', '{{ form.subcategory.value|default:ticket.subcategory|escapejs }}');
+loadSubs('{{ ticket.category }}', '{{ ticket.subcategory }}');
 </script>
 {% endblock %}

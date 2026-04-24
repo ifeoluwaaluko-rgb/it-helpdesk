@@ -1,44 +1,42 @@
-# IT Helpdesk MVP
+# Zynaros
 
-An in-place rebuilt Django helpdesk app for internal IT operations, with Railway kept as the deployment target.
+Clean rebuilt MVP for an AI-assisted IT helpdesk/ticketing system.
 
-## Product Areas
+## Default seeded users
 
-- Tickets for intake, triage, assignment, SLA tracking, comments, and resolution.
-- Knowledge base for reusable support articles and revision history.
-- Directory for staff records and department links.
-- Assets for inventory, assignment, and incident logging.
-- Settings and integrations for email, webhooks, Graph, WhatsApp, and OpenAI.
+The project still runs `seed.py` on startup as requested. If the database is empty, it creates demo users:
 
-## Current Rebuild Baseline
+- manager / manager
+- senior1 / senior1
+- consultant1 / consultant1
+- consultant2 / consultant2
+- associate1 / associate1
+- associate2 / associate2
 
-- Canonical Django settings module: `helpdesk.settings`
-- Railway startup path: `Procfile -> start.sh -> gunicorn helpdesk.wsgi`
-- Production `SECRET_KEY` is required
-- Stronger role checks are in place for write-heavy flows
-- Major mutation paths now use Django forms or service helpers instead of raw POST handling
-- SMTP and IMAP runtime config resolve consistently from Railway env vars or saved integration settings
-- Seed data is opt-in through `RUN_SEED_ON_DEPLOY=true`
+## Railway processes
 
-## Local Run
+Use:
 
-1. Install dependencies from `requirements.txt`.
-2. Set `DJANGO_SETTINGS_MODULE=helpdesk.settings`.
-3. Provide a `SECRET_KEY`.
-4. Run `python manage.py migrate`.
-5. Run `python manage.py collectstatic --noinput`.
-6. Run `python manage.py runserver`.
+```
+web: bash start.sh
+worker: bash start-worker.sh
+```
 
-## Railway
+The web process runs migrations, collectstatic, seed, and Gunicorn.
+The worker polls inbound IMAP every `EMAIL_POLL_SECONDS` seconds, default 15.
 
-Railway-specific notes live in [RAILWAY.md](C:/Users/Ifeoluwa/Documents/Codex/2026-04-23-files-mentioned-by-the-user-it/it-helpdesk-MVP-PHASE-1/it-helpdesk-6d5ef855bfdba177e3525011005677587bd8fb66/RAILWAY.md).
+## Outbound email
 
-Release and handoff notes live in [RELEASE_READY.md](C:/Users/Ifeoluwa/Documents/Codex/2026-04-23-files-mentioned-by-the-user-it/it-helpdesk-MVP-PHASE-1/it-helpdesk-6d5ef855bfdba177e3525011005677587bd8fb66/RELEASE_READY.md).
+Outbound email is disabled by default:
 
-## Demo Data
+```
+EMAIL_ENABLED=False
+```
 
-`start.sh` only runs `seed.py` when `RUN_SEED_ON_DEPLOY=true`. Keep that disabled in production unless you explicitly want sample users, tickets, articles, directory entries, and assets.
+Inbound IMAP can still be configured from Settings.
 
-## Known Limitation In This Session
+## Validation done before packaging
 
-The Django test suite and management checks were not executed here because this session did not have a working `python` or `py` runtime.
+- Python compile check passed for all project `.py` files.
+- Static code sanity checks were performed.
+- Django runtime tests could not be executed in this environment because Django is not installed here.

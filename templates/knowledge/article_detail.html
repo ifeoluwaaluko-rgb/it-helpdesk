@@ -7,9 +7,7 @@
     <a href="{% url 'article_list' %}" class="text-sm text-gray-400 hover:text-blue-600">← Knowledge Base</a>
     <div class="flex gap-2">
       <a href="{% url 'article_history' article.pk %}" class="zd-btn zd-btn-secondary text-xs">🕓 History ({{ article.revisions.count }})</a>
-      {% if can_edit %}
       <a href="{% url 'edit_article' article.pk %}" class="zd-btn zd-btn-primary text-xs">✏️ Edit</a>
-      {% endif %}
       {% if can_delete %}
       <button onclick="document.getElementById('delete-modal').classList.remove('hidden')" class="zd-btn zd-btn-danger text-xs">🗑 Delete</button>
       {% endif %}
