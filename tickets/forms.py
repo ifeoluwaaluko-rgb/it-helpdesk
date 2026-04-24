@@ -2,7 +2,7 @@ import os
 
 from django import forms
 
-from .models import Ticket
+from .models import ServiceCatalogItem, Ticket
 
 
 ALLOWED_ATTACHMENT_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".pdf", ".docx", ".xlsx", ".txt", ".zip"}
@@ -14,6 +14,11 @@ class TicketCreateForm(forms.Form):
     description = forms.CharField(widget=forms.Textarea)
     user_email = forms.EmailField()
     channel = forms.ChoiceField(choices=Ticket.CHANNEL_CHOICES, required=False)
+    request_type = forms.ChoiceField(choices=Ticket.REQUEST_TYPE_CHOICES, required=False)
+    impact = forms.ChoiceField(choices=Ticket.IMPACT_CHOICES, required=False)
+    urgency = forms.ChoiceField(choices=Ticket.URGENCY_CHOICES, required=False)
+    business_service = forms.CharField(required=False, max_length=120)
+    catalog_item = forms.ModelChoiceField(queryset=ServiceCatalogItem.objects.filter(is_active=True), required=False)
     staff_member = forms.IntegerField(required=False)
     attachment = forms.FileField(required=False)
 
@@ -33,6 +38,24 @@ class TicketCreateForm(forms.Form):
         value = self.cleaned_data.get("channel") or "manual"
         valid_channels = {choice for choice, _ in Ticket.CHANNEL_CHOICES}
         return value if value in valid_channels else "manual"
+
+    def clean_request_type(self):
+        value = self.cleaned_data.get('request_type') or 'incident'
+        valid = {choice for choice, _ in Ticket.REQUEST_TYPE_CHOICES}
+        return value if value in valid else 'incident'
+
+    def clean_impact(self):
+        value = self.cleaned_data.get('impact') or 'single_user'
+        valid = {choice for choice, _ in Ticket.IMPACT_CHOICES}
+        return value if value in valid else 'single_user'
+
+    def clean_urgency(self):
+        value = self.cleaned_data.get('urgency') or 'normal'
+        valid = {choice for choice, _ in Ticket.URGENCY_CHOICES}
+        return value if value in valid else 'normal'
+
+    def clean_business_service(self):
+        return self.cleaned_data.get('business_service', '').strip()
 
     def clean_attachment(self):
         attachment = self.cleaned_data.get("attachment")
@@ -86,6 +109,11 @@ class TicketEditForm(forms.Form):
     subcategory = forms.CharField(required=False, max_length=100)
     item = forms.CharField(required=False, max_length=200)
     priority = forms.ChoiceField(choices=Ticket.PRIORITY_CHOICES)
+    request_type = forms.ChoiceField(choices=Ticket.REQUEST_TYPE_CHOICES, required=False)
+    impact = forms.ChoiceField(choices=Ticket.IMPACT_CHOICES, required=False)
+    urgency = forms.ChoiceField(choices=Ticket.URGENCY_CHOICES, required=False)
+    approval_status = forms.ChoiceField(choices=Ticket.APPROVAL_CHOICES, required=False)
+    business_service = forms.CharField(required=False, max_length=120)
     status = forms.ChoiceField(choices=Ticket.STATUS_CHOICES, required=False)
     tags = forms.CharField(required=False, max_length=255)
     edit_note = forms.CharField(required=False, max_length=255)
@@ -114,6 +142,9 @@ class TicketEditForm(forms.Form):
 
     def clean_item(self):
         return self.cleaned_data["item"].strip()
+
+    def clean_business_service(self):
+        return self.cleaned_data.get('business_service', '').strip()
 
     def clean_tags(self):
         return self.cleaned_data["tags"].strip()

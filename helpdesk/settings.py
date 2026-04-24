@@ -1,23 +1,41 @@
 from pathlib import Path
 import os
+import sys
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-helpdesk-dev-key-change-in-production')
 DEBUG = os.environ.get('DEBUG', 'False').strip().lower() == 'true'
 
-ALLOWED_HOSTS = [
-    'web-production-a03c9.up.railway.app',
-    '127.0.0.1',
-    'localhost',
-    '*',
-]
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-helpdesk-dev-key-change-in-production'
+    else:
+        raise ImproperlyConfigured('SECRET_KEY must be set when DEBUG is false.')
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://web-production-a03c9.up.railway.app',
-    'https://*.railway.app',
-    'https://*.up.railway.app',
-]
+
+def _env_list(name, default=''):
+    raw = os.environ.get(name, default)
+    return [item.strip() for item in raw.split(',') if item.strip()]
+
+
+ALLOWED_HOSTS = _env_list(
+    'ALLOWED_HOSTS',
+    '127.0.0.1,localhost',
+)
+railway_public_domain = os.environ.get('RAILWAY_PUBLIC_DOMAIN', '').strip()
+if railway_public_domain and railway_public_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(railway_public_domain)
+
+CSRF_TRUSTED_ORIGINS = _env_list(
+    'CSRF_TRUSTED_ORIGINS',
+    '',
+)
+if railway_public_domain:
+    railway_origin = f'https://{railway_public_domain}'
+    if railway_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(railway_origin)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -128,6 +146,16 @@ CONN_MAX_AGE = 60
 
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'True').strip().lower() == 'true' and not DEBUG
+SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'True').strip().lower() == 'true' and not DEBUG
+CSRF_COOKIE_SECURE = os.environ.get('CSRF_COOKIE_SECURE', 'True').strip().lower() == 'true' and not DEBUG
+if 'test' in sys.argv:
+    SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
 
 LOGGING = {
     'version': 1,

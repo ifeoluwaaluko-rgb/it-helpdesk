@@ -75,6 +75,16 @@ def calculate_agent_productivity(tickets, user):
 def build_dashboard_metrics(tickets):
     sla_breached_ids, sla_breached_count = summarize_sla_breaches(tickets)
     chart_labels, chart_data = build_ticket_volume_chart(tickets)
+    active_tickets = tickets.exclude(status__in=['resolved', 'closed'])
+    active_list = list(active_tickets)
+    at_risk = sum(1 for ticket in active_list if ticket.health_label in ['Critical', 'At Risk'])
+    awaiting_approval = active_tickets.filter(approval_status='pending').count()
+    high_impact = active_tickets.filter(Q(impact__in=['department', 'company']) | Q(priority='critical')).count()
+    automation_candidates = active_tickets.filter(assigned_to__isnull=True).count() + awaiting_approval
+    backlog_health = 100
+    if active_list:
+        avg_risk = round(sum(ticket.risk_score for ticket in active_list) / len(active_list))
+        backlog_health = max(0, 100 - avg_risk)
     return {
         "total": tickets.count(),
         "open": tickets.filter(status="open").count(),
@@ -86,6 +96,11 @@ def build_dashboard_metrics(tickets):
         "sla_compliance": calculate_sla_compliance(tickets),
         "avg_resolution": calculate_avg_resolution_hours(tickets),
         "avg_first_response": calculate_avg_first_response_minutes(tickets),
+        "at_risk": at_risk,
+        "awaiting_approval": awaiting_approval,
+        "high_impact": high_impact,
+        "automation_candidates": automation_candidates,
+        "backlog_health": backlog_health,
         "category_counts": tickets.values("category").annotate(count=Count("id")).order_by("-count"),
         "cat_resolution": calculate_category_resolution_hours(tickets),
         "chart_labels": json.dumps(chart_labels),

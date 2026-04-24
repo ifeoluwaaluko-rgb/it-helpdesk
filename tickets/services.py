@@ -116,6 +116,11 @@ def update_ticket_fields(ticket, edited_by, payload, can_edit_status):
 
     new_priority = payload.get("priority", ticket.priority)
     ticket.priority = new_priority if new_priority in valid_priorities else ticket.priority
+    ticket.request_type = payload.get('request_type') or ticket.request_type
+    ticket.impact = payload.get('impact') or ticket.impact
+    ticket.urgency = payload.get('urgency') or ticket.urgency
+    ticket.approval_status = payload.get('approval_status') or ticket.approval_status
+    ticket.business_service = payload.get('business_service', ticket.business_service)
     ticket.tags = payload.get("tags", ticket.tags)
 
     if can_edit_status:
