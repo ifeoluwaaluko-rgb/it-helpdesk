@@ -71,7 +71,14 @@ def log_integration_event(user, integration, action, status="success", message="
 def get_configs():
     configs = {}
     for key in INTEGRATION_KEYS:
-        obj, _ = IntegrationConfig.objects.get_or_create(integration=key)
+        obj, _ = IntegrationConfig.objects.get_or_create(
+            integration=key,
+            defaults={
+                "auth_mode": "basic",
+                "use_tls": True,
+                "use_ssl": False,
+            },
+        )
         configs[key] = obj
     return configs
 

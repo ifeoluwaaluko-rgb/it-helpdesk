@@ -74,6 +74,7 @@ class IntegrationConfig(models.Model):
     port        = models.IntegerField(null=True, blank=True)
     username    = models.CharField(max_length=255, blank=True,
                                    help_text='Email address / API user')
+    auth_mode   = models.CharField(max_length=30, blank=True, default='basic')
     use_tls     = models.BooleanField(default=True)
     use_ssl     = models.BooleanField(default=False)
     webhook_url = models.CharField(max_length=500, blank=True,
