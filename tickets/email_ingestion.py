@@ -5,13 +5,15 @@ Saves inline images and file attachments to TicketAttachment.
 """
 import imaplib
 import email
+import os
+import mimetypes
 from email.header import decode_header
+from django.conf import settings
 from django.core.files.base import ContentFile
 from .models import Ticket, TicketAttachment
 from .classifier import classify
 from .assignment import auto_assign
 from .notifications import notify_ticket_received
-from settings_app.services import get_imap_runtime_config
 
 
 def decode_str(value):
@@ -75,13 +77,10 @@ def fetch_and_create_tickets():
     Returns count of tickets created.
     """
     created = 0
-    imap_config = get_imap_runtime_config()
-    if not imap_config.enabled or not imap_config.is_configured:
-        return created
     try:
-        mail = imaplib.IMAP4_SSL(imap_config.host, imap_config.port)
-        mail.login(imap_config.username, imap_config.password)
-        mail.select(imap_config.folder)
+        mail = imaplib.IMAP4_SSL(settings.IMAP_HOST, settings.IMAP_PORT)
+        mail.login(settings.IMAP_USER, settings.IMAP_PASSWORD)
+        mail.select(settings.IMAP_FOLDER)
 
         _, message_ids = mail.search(None, 'UNSEEN')
 
@@ -107,7 +106,6 @@ def fetch_and_create_tickets():
 
                 body = get_email_body(msg)
                 result = classify(title, body)
-                external_message_id = decode_str(msg.get("Message-ID", "")).strip()
 
                 ticket = Ticket.objects.create(
                     title=title,
@@ -120,7 +118,6 @@ def fetch_and_create_tickets():
                     required_level=result.get('level', 'associate'),
                     sla_hours=result.get('sla_hours', 24),
                     channel='email',
-                    external_message_id=external_message_id,
                     raw_email=raw.decode('utf-8', errors='replace'),
                 )
 

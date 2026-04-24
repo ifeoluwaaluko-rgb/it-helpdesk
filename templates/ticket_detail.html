@@ -3,36 +3,39 @@
 {% block breadcrumb %}<a href="{% url 'ticket_list' %}" class="hover:text-[#1f73b7]">Tickets</a> <span class="mx-1">/</span> #{{ ticket.id }}{% endblock %}
 {% block content %}
 
+<!-- Top action bar -->
 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
   <div class="flex items-center gap-2 flex-wrap">
     {% include 'partials/status_badge.html' with status=ticket.status %}
     {% include 'partials/priority_badge.html' with priority=ticket.priority %}
-    {% if ticket.sla_state == 'red' %}<span class="status-badge bg-red-100 text-red-700 animate-pulse">SLA Breached</span>{% elif ticket.sla_state == 'yellow' %}<span class="status-badge bg-yellow-100 text-yellow-700">SLA At Risk</span>{% elif ticket.sla_state == 'green' %}<span class="status-badge bg-green-100 text-green-700">SLA On Track</span>{% endif %}
+    {% if ticket.sla_state == 'red' %}<span class="status-badge bg-red-100 text-red-700 animate-pulse">⚠ SLA Breached</span>{% elif ticket.sla_state == 'yellow' %}<span class="status-badge bg-yellow-100 text-yellow-700">⏳ SLA At Risk</span>{% elif ticket.sla_state == 'green' %}<span class="status-badge bg-green-100 text-green-700">✓ SLA On Track</span>{% endif %}
     {% if ticket.channel != 'manual' %}
-    <span class="tag">{{ ticket.get_channel_display }}</span>
+    <span class="tag">{% if ticket.channel == 'email' %}📧{% elif ticket.channel == 'walk_in' %}🚶{% elif ticket.channel == 'phone' %}📞{% else %}💬{% endif %} {{ ticket.get_channel_display }}</span>
     {% endif %}
   </div>
   <div class="flex items-center gap-2 flex-wrap">
-    {% if can_edit and not ticket.assigned_to %}
+    {% if not ticket.assigned_to %}
     <form method="post">{% csrf_token %}<input type="hidden" name="action" value="pickup">
-      <button class="zd-btn zd-btn-primary text-xs">Pick Up</button>
+      <button class="zd-btn zd-btn-primary text-xs">🙋 Pick Up</button>
     </form>
     {% endif %}
-    {% if can_edit %}
-    <a href="{% url 'ticket_edit' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">Edit</a>
-    {% endif %}
-    <a href="{% url 'ticket_history' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">History{% if ticket.edit_history.count %} ({{ ticket.edit_history.count }}){% endif %}</a>
+    <a href="{% url 'ticket_edit' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">✏ Edit</a>
+    <a href="{% url 'ticket_history' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">🕓 History{% if ticket.edit_history.count %} ({{ ticket.edit_history.count }}){% endif %}</a>
     {% if can_delete %}
-    <a href="{% url 'ticket_delete' ticket.pk %}" class="zd-btn zd-btn-danger text-xs">Delete</a>
+    <a href="{% url 'ticket_delete' ticket.pk %}" class="zd-btn zd-btn-danger text-xs">🗑 Delete</a>
     {% endif %}
-    {% if can_edit and ticket.status == 'resolved' %}
-    <a href="{% url 'create_article_from_ticket' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">Save to KB</a>
+    {% if ticket.status == 'resolved' %}
+    <a href="{% url 'create_article_from_ticket' ticket.pk %}" class="zd-btn zd-btn-secondary text-xs">📚 Save to KB</a>
     {% endif %}
   </div>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+  <!-- LEFT: Main content -->
   <div class="lg:col-span-2 space-y-4">
+
+    <!-- Ticket body -->
     <div class="zd-card">
       <div class="px-5 py-4 border-b border-[#e9ebed]">
         <h1 class="text-base font-bold text-[#2f3941]">{{ ticket.title }}</h1>
@@ -44,11 +47,12 @@
           <span class="capitalize">{{ ticket.category_display }}</span>
         </div>
       </div>
+      <!-- SLA Bar -->
       {% if ticket.status not in 'resolved,closed' %}
       <div class="px-5 py-3 border-b border-[#e9ebed] {% if ticket.is_sla_breached %}bg-red-50{% else %}bg-blue-50{% endif %}">
         <div class="flex items-center justify-between text-xs">
           <span class="font-semibold {% if ticket.is_sla_breached %}text-red-600{% else %}text-[#1f73b7]{% endif %}">
-            {% if ticket.is_sla_breached %}SLA Deadline Passed{% else %}SLA: {{ ticket.sla_hours }}h target{% endif %}
+            {% if ticket.is_sla_breached %}⏰ SLA Deadline Passed{% else %}⏱ SLA: {{ ticket.sla_hours }}h target{% endif %}
           </span>
           <span class="font-mono font-semibold {% if ticket.is_sla_breached %}text-red-700{% else %}text-[#1f73b7]{% endif %}" id="sla-timer">{{ ticket.sla_deadline|date:"M d, H:i" }}</span>
         </div>
@@ -66,11 +70,13 @@
         {% endif %}
 
         {% if ticket.attachments.exists %}
+        <!-- Email / uploaded attachments -->
         <div class="mt-5 pt-4 border-t border-[#e9ebed]">
-          <p class="text-xs font-semibold text-[#68737d] uppercase tracking-wide mb-3">Attachments ({{ ticket.attachments.count }})</p>
+          <p class="text-xs font-semibold text-[#68737d] uppercase tracking-wide mb-3">📎 Attachments ({{ ticket.attachments.count }})</p>
           <div class="flex flex-wrap gap-3">
             {% for att in ticket.attachments.all %}
               {% if att.is_image %}
+              <!-- Image thumbnail — click to open full size -->
               <a href="{{ att.file.url }}" target="_blank" rel="noopener"
                  class="group relative block w-28 h-28 rounded-xl overflow-hidden border border-[#e9ebed] hover:border-[#1f73b7] transition shadow-sm">
                 <img src="{{ att.file.url }}" alt="{{ att.filename }}"
@@ -80,9 +86,10 @@
                 </div>
               </a>
               {% else %}
+              <!-- File attachment -->
               <a href="{{ att.file.url }}" target="_blank" rel="noopener"
                  class="flex items-center gap-2 bg-[#f3f4f6] hover:bg-[#e9ebed] border border-[#e9ebed] rounded-xl px-3 py-2.5 transition group">
-                <span class="text-2xl">File</span>
+                <span class="text-2xl">📄</span>
                 <div>
                   <p class="text-xs font-medium text-[#2f3941] group-hover:text-[#1f73b7] truncate max-w-[140px]">{{ att.filename }}</p>
                   <p class="text-[10px] text-[#68737d]">{{ att.source|title }}</p>
@@ -96,6 +103,7 @@
       </div>
     </div>
 
+    <!-- Comments -->
     <div class="zd-card">
       <div class="px-5 py-3 border-b border-[#e9ebed] flex items-center justify-between">
         <h2 class="text-sm font-semibold text-[#2f3941]">Conversation</h2>
@@ -118,23 +126,23 @@
         <div class="px-5 py-6 text-sm text-[#68737d] text-center">No notes yet.</div>
         {% endfor %}
       </div>
-      {% if can_edit %}
       <div class="px-5 py-4 border-t border-[#e9ebed] bg-[#f9fafb]">
         <form method="post">
           {% csrf_token %}
           <input type="hidden" name="action" value="comment">
-          <textarea name="body" rows="3" placeholder="Add an internal note..." required class="zd-input resize-none mb-2">{{ comment_form.body.value|default:'' }}</textarea>
+          <textarea name="body" rows="3" placeholder="Add an internal note..." required
+            class="zd-input resize-none mb-2"></textarea>
           <div class="flex justify-end">
             <button type="submit" class="zd-btn zd-btn-primary text-xs">Submit Note</button>
           </div>
         </form>
       </div>
-      {% endif %}
     </div>
 
+    <!-- Related KB -->
     {% if related_articles %}
     <div class="zd-card p-5">
-      <h2 class="text-sm font-semibold text-[#2f3941] mb-3">Suggested Articles</h2>
+      <h2 class="text-sm font-semibold text-[#2f3941] mb-3">💡 Suggested Articles</h2>
       <div class="space-y-2">
         {% for a in related_articles %}
         <div class="flex items-start gap-2">
@@ -147,8 +155,10 @@
     {% endif %}
   </div>
 
+  <!-- RIGHT: Sidebar -->
   <div class="space-y-4">
-    {% if can_edit %}
+
+    <!-- Category (editable inline) -->
     <div class="zd-card p-4">
       <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Category</h3>
       <form method="post" id="cat-form">
@@ -159,39 +169,37 @@
             <label class="zd-label">Category</label>
             <select name="category" id="cat-select" class="zd-select" onchange="loadSubcategories(this.value)">
               {% for val, label in category_choices %}
-              <option value="{{ val }}" {% if category_form.category.value == val %}selected{% endif %}>{{ label }}</option>
+              <option value="{{ val }}" {% if ticket.category == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
           </div>
           <div>
             <label class="zd-label">Subcategory</label>
             <select name="subcategory" id="subcat-select" class="zd-select" onchange="loadItems(this.value)">
-              <option value="{{ category_form.subcategory.value|default:'' }}">{{ category_form.subcategory.value|default:"Select" }}</option>
+              <option value="{{ ticket.subcategory }}">{{ ticket.subcategory|default:"— Select —" }}</option>
             </select>
           </div>
           <div>
             <label class="zd-label">Item</label>
-            <input type="text" name="item" id="item-input" value="{{ category_form.item.value|default:'' }}" class="zd-input" placeholder="Specific item...">
+            <input type="text" name="item" id="item-input" value="{{ ticket.item }}" class="zd-input" placeholder="Specific item...">
           </div>
           <button type="submit" class="zd-btn zd-btn-secondary w-full justify-center text-xs">Update Category</button>
         </div>
       </form>
     </div>
-    {% endif %}
 
-    {% if can_edit %}
+    <!-- Status & Assign -->
     <div class="zd-card p-4">
       <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Status</h3>
       <form method="post" class="mb-3">
         {% csrf_token %}
         <input type="hidden" name="action" value="update_status">
         <select name="status" class="zd-select mb-2">
-          {% for val, label in status_choices %}<option value="{{ val }}" {% if status_form.status.value == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          {% for val, label in status_choices %}<option value="{{ val }}" {% if ticket.status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
         </select>
         <button type="submit" class="zd-btn zd-btn-primary w-full justify-center text-xs">Update Status</button>
       </form>
     </div>
-    {% endif %}
 
     {% if can_assign %}
     <div class="zd-card p-4">
@@ -204,14 +212,15 @@
         {% csrf_token %}
         <input type="hidden" name="action" value="reassign">
         <select name="user_id" class="zd-select mb-2">
-          <option value="">Select staff</option>
-          {% for u in staff_users %}<option value="{{ u.id }}" {% if reassign_form.user_id.value|stringformat:"s" == u.id|stringformat:"s" %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>{% endfor %}
+          <option value="">— Select staff —</option>
+          {% for u in staff_users %}<option value="{{ u.id }}" {% if ticket.assigned_to.id == u.id %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>{% endfor %}
         </select>
         <button type="submit" class="zd-btn zd-btn-secondary w-full justify-center text-xs">Reassign</button>
       </form>
     </div>
     {% endif %}
 
+    <!-- Metadata -->
     <div class="zd-card p-4">
       <h3 class="text-xs font-semibold text-[#68737d] uppercase tracking-wider mb-3">Details</h3>
       <dl class="space-y-2 text-xs">
@@ -232,7 +241,7 @@ const categoryTree = {{ category_tree_json|safe }};
 
 function loadSubcategories(cat, selectedSub) {
   const sel = document.getElementById('subcat-select');
-  sel.innerHTML = '<option value="">Select</option>';
+  sel.innerHTML = '<option value="">— Select —</option>';
   const subs = categoryTree[cat]?.subcategories || {};
   Object.keys(subs).forEach(sub => {
     const opt = document.createElement('option');
@@ -246,11 +255,14 @@ function loadItems(sub) {
   const cat = document.getElementById('cat-select').value;
   const inp = document.getElementById('item-input');
   const items = categoryTree[cat]?.subcategories?.[sub] || [];
+  // Suggest first item if empty
   if (inp.value === '' && items.length) inp.value = items[0] !== 'Other' ? items[0] : '';
 }
 
-loadSubcategories('{{ category_form.category.value|default:ticket.category|escapejs }}', '{{ category_form.subcategory.value|default:ticket.subcategory|escapejs }}');
+// Init
+loadSubcategories('{{ ticket.category }}', '{{ ticket.subcategory }}');
 
+// SLA countdown
 const remaining = {{ ticket.sla_remaining_seconds }};
 const el = document.getElementById('sla-countdown');
 if (el && remaining > 0) {

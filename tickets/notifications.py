@@ -2,33 +2,20 @@
 Email notifications for ticket events.
 Configure SMTP settings in settings.py / environment variables.
 """
-from django.core.mail import get_connection, send_mail
-
-from settings_app.services import get_smtp_runtime_config
+from django.core.mail import send_mail
+from django.conf import settings
 
 
 def _safe_send(subject, body, recipients):
     recipients = [email for email in recipients if email]
     if not recipients:
         return False
-    smtp = get_smtp_runtime_config()
-    if not smtp.enabled or not smtp.is_configured:
-        return False
     try:
-        connection = get_connection(
-            host=smtp.host,
-            port=smtp.port,
-            username=smtp.username,
-            password=smtp.password,
-            use_tls=smtp.use_tls,
-            fail_silently=True,
-        )
         send_mail(
             subject=subject,
             message=body,
-            from_email=smtp.from_email or smtp.username,
+            from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=recipients,
-            connection=connection,
             fail_silently=True,
         )
         return True

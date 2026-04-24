@@ -6,9 +6,8 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models import Count, Q
 from django.contrib import messages
-from django.conf import settings
-from django.http import JsonResponse, Http404, FileResponse
-from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment, TicketEvent
+from django.http import JsonResponse, Http404
+from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment
 from .classifier import classify, CATEGORY_TREE
 from .assignment import auto_assign
 from .notifications import notify_assignment, notify_status_change, notify_ticket_received
@@ -17,9 +16,6 @@ import json
 import re
 from datetime import date, timedelta
 import logging
-from pathlib import Path
-import mimetypes
-from types import SimpleNamespace
 
 logger = logging.getLogger(__name__)
 
@@ -39,85 +35,6 @@ def _mark_first_response(ticket):
     if not ticket.first_response_at:
         ticket.first_response_at = timezone.now()
         ticket.save(update_fields=['first_response_at', 'updated_at'])
-
-
-
-def _log_status_event(ticket, actor, action, from_status='', to_status='', note=''):
-    TicketEditHistory.objects.create(
-        ticket=ticket,
-        edited_by=actor,
-        title=ticket.title,
-        description=ticket.description,
-        category=ticket.category,
-        subcategory=ticket.subcategory,
-        item=ticket.item,
-        priority=ticket.priority,
-        status=from_status or ticket.status,
-        edit_note=f"EVENT::{action}||{from_status or ''}||{to_status or ''}||{(note or '')[:180]}",
-    )
-
-
-def _log_ticket_event(ticket, actor, event_type, from_status='', to_status='', note=''):
-    """Create a TicketEvent record for the audit trail."""
-    try:
-        TicketEvent.objects.create(
-            ticket=ticket,
-            actor=actor,
-            event_type=event_type,
-            from_status=from_status or '',
-            to_status=to_status or '',
-            note=(note or '')[:255],
-        )
-    except Exception:
-        logger.exception('Failed to create TicketEvent for ticket %s', ticket.id)
-
-
-def _get_status_events(ticket):
-    label_map = {
-        'created': 'Created',
-        'picked_up': 'Picked Up',
-        'assigned': 'Assigned',
-        'reassigned': 'Reassigned',
-        'status_changed': 'Status Changed',
-        'resolved': 'Resolved',
-        'closed': 'Closed',
-        'reopened': 'Reopened',
-    }
-    events = [
-        SimpleNamespace(
-            action='created',
-            action_display='Created',
-            created_at=ticket.created_at,
-            actor=None,
-            from_status='',
-            to_status=ticket.status,
-            note='Ticket created',
-        )
-    ]
-
-    for history in ticket.edit_history.select_related('edited_by').all():
-        note = history.edit_note or ''
-        if not note.startswith('EVENT::'):
-            continue
-        payload = note[len('EVENT::'):]
-        parts = payload.split('||', 3)
-        while len(parts) < 4:
-            parts.append('')
-        action, from_status, to_status, extra_note = parts
-        events.append(
-            SimpleNamespace(
-                action=action,
-                action_display=label_map.get(action, action.replace('_', ' ').title()),
-                created_at=history.edited_at,
-                actor=history.edited_by,
-                from_status=from_status,
-                to_status=to_status,
-                note=extra_note,
-            )
-        )
-
-    events.sort(key=lambda e: e.created_at, reverse=True)
-    return events[:12]
 
 
 def _normalize_issue_signature(ticket):
@@ -194,8 +111,6 @@ def can_delete_edit(user):
 
 
 def login_view(request):
-    if not User.objects.exists():
-        return redirect('first_time_setup')
     if request.user.is_authenticated:
         return redirect('dashboard')
     if request.method == 'POST':
@@ -237,8 +152,8 @@ def dashboard(request):
     sla_compliance = round((sla_ok / closed.count()) * 100) if closed.exists() else 100
 
     resolved_tickets = all_tickets.filter(resolved_at__isnull=False)
-    resolution_seconds = [t.resolution_time_seconds for t in resolved_tickets if t.resolution_time_seconds is not None]
-    avg_resolution = round(sum(resolution_seconds) / len(resolution_seconds)) if resolution_seconds else 0
+    times = [t.resolution_time_hours for t in resolved_tickets if t.resolution_time_hours]
+    avg_resolution = round(sum(times)/len(times), 1) if times else 0
 
     today = date.today()
     chart_labels, chart_data = [], []
@@ -253,9 +168,8 @@ def dashboard(request):
     for cat, _ in Ticket.CATEGORY_CHOICES:
         cat_tickets = resolved_tickets.filter(category=cat)
         if cat_tickets.exists():
-            t2 = [t.resolution_time_seconds for t in cat_tickets if t.resolution_time_seconds is not None]
-            if t2:
-                cat_resolution[cat] = round(sum(t2) / len(t2))
+            t2 = [t.resolution_time_hours for t in cat_tickets if t.resolution_time_hours]
+            if t2: cat_resolution[cat] = round(sum(t2)/len(t2), 1)
 
     staff_workload = []
     if is_manager:
@@ -269,8 +183,8 @@ def dashboard(request):
     my_productivity = round((my_resolved / my_total_assigned) * 100) if my_total_assigned > 0 else 0
 
     recent = all_tickets[:15] if is_manager else my_tickets[:15]
-    first_response_values = [t.first_response_seconds for t in all_tickets if t.first_response_seconds is not None]
-    avg_first_response = round(sum(first_response_values) / len(first_response_values)) if first_response_values else 0
+    first_response_values = [t.first_response_minutes for t in all_tickets if t.first_response_minutes is not None]
+    avg_first_response = round(sum(first_response_values) / len(first_response_values), 1) if first_response_values else 0
     recurring_issues = _get_recurring_issue_summary() if is_manager else []
 
     kpis = [
@@ -354,76 +268,28 @@ def ticket_detail(request, pk):
             if body:
                 TicketComment.objects.create(ticket=ticket, author=request.user, body=body)
                 _mark_first_response(ticket)
-                _log_ticket_event(ticket, request.user, 'commented', from_status=ticket.status, to_status=ticket.status, note='Comment added.')
 
         elif action == 'pickup' and not ticket.assigned_to:
-            previous_status = ticket.status
             ticket.assigned_to = request.user
             ticket.status = 'in_progress'
             ticket.save()
             _mark_first_response(ticket)
             notify_assignment(ticket, request.user)
-            _log_status_event(ticket, request.user, 'picked_up', from_status=previous_status, to_status='in_progress', note=f'Picked up by {request.user.get_full_name() or request.user.username}.')
-            _log_ticket_event(ticket, request.user, 'picked_up', from_status=previous_status, to_status='in_progress', note=f'Picked up by {request.user.get_full_name() or request.user.username}.')
             messages.success(request, f'You picked up ticket #{ticket.id}.')
 
         elif action == 'update_status':
             new_status = request.POST.get('status', '').strip()
             valid_statuses = [s for s, _ in Ticket.STATUS_CHOICES]
-
-            if not new_status or new_status not in valid_statuses:
-                messages.error(request, 'Invalid status selection.')
-                return redirect('ticket_detail', pk=pk)
-
-            try:
+            if new_status and new_status in valid_statuses:
                 old_status = ticket.status
-                update_fields = ['status', 'updated_at']
-
                 ticket.status = new_status
-
-                if new_status in ['resolved', 'closed']:
-                    if not ticket.resolved_at:
-                        ticket.resolved_at = timezone.now()
-                        update_fields.append('resolved_at')
-                elif new_status in ['open', 'in_progress', 'pending']:
-                    if ticket.resolved_at:
-                        ticket.resolved_at = None
-                        update_fields.append('resolved_at')
-
-                ticket.save(update_fields=update_fields)
-
+                if new_status == 'resolved' and not ticket.resolved_at:
+                    ticket.resolved_at = timezone.now()
+                ticket.save()
                 if new_status in ['in_progress', 'pending', 'resolved', 'closed']:
                     _mark_first_response(ticket)
-
                 if new_status != old_status:
-                    action_name = 'status_changed'
-                    note = ''
-                    if new_status == 'resolved':
-                        action_name = 'resolved'
-                        note = f'Resolved by {request.user.get_full_name() or request.user.username}.'
-                    elif new_status == 'closed':
-                        action_name = 'closed'
-                        note = f'Closed by {request.user.get_full_name() or request.user.username}.'
-                    elif old_status in ['resolved', 'closed'] and new_status in ['open', 'in_progress', 'pending']:
-                        action_name = 'reopened'
-                        note = f'Reopened by {request.user.get_full_name() or request.user.username}.'
-
-                    _log_status_event(ticket, request.user, action_name, from_status=old_status, to_status=new_status, note=note)
-                    _log_ticket_event(ticket, request.user, action_name, from_status=old_status, to_status=new_status, note=note)
-
-                    try:
-                        notify_status_change(ticket, request.user)
-                    except Exception:
-                        logger.exception('Failed to send status change notification for ticket %s', ticket.id)
-                    messages.success(
-                        request,
-                        f'Ticket #{ticket.id} status updated from {dict(Ticket.STATUS_CHOICES).get(old_status, old_status)} to {ticket.get_status_display()}.'
-                    )
-                else:
-                    messages.info(request, f'Ticket #{ticket.id} is already marked as {ticket.get_status_display()}.')
-            except Exception:
-                logger.exception('Failed to update status for ticket %s', ticket.id)
-                messages.error(request, 'We could not update the ticket status. Please try again.')
+                    notify_status_change(ticket, request.user)
 
         elif action == 'reassign' and can_assign(request.user):
             uid = request.POST.get('user_id', '').strip()
@@ -436,22 +302,8 @@ def ticket_detail(request, pk):
                     if ticket.assigned_to and (not old or old.id != ticket.assigned_to.id):
                         notify_assignment(ticket, ticket.assigned_to)
                         _mark_first_response(ticket)
-                        action_name = 'reassigned' if old else 'assigned'
-                        note = f'Assigned to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}'
-                        if old:
-                            note = f'Reassigned from {old.get_full_name() or old.username} to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}'
-                        _log_status_event(ticket, request.user, action_name, from_status=ticket.status, to_status=ticket.status, note=note)
-                        _log_ticket_event(ticket, request.user, action_name, from_status=ticket.status, to_status=ticket.status, note=note)
-                        if old:
-                            messages.success(request, f'Ticket #{ticket.id} reassigned from {old.get_full_name() or old.username} to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}.')
-                        else:
-                            messages.success(request, f'Ticket #{ticket.id} assigned to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}.')
-                    else:
-                        messages.info(request, 'Ticket assignee is unchanged.')
                 except (ValueError, User.DoesNotExist):
                     messages.error(request, 'Invalid staff selection.')
-            else:
-                messages.error(request, 'Please choose a staff member to reassign this ticket.')
 
         elif action == 'update_category':
             # Save snapshot before changing
@@ -466,22 +318,17 @@ def ticket_detail(request, pk):
             ticket.subcategory = request.POST.get('subcategory', '')
             ticket.item = request.POST.get('item', '')
             ticket.save()
-            _log_ticket_event(ticket, request.user, 'category_updated', from_status=ticket.status, to_status=ticket.status, note=f'Category updated to {ticket.get_category_display()}.')
             messages.success(request, 'Category updated.')
 
         return redirect('ticket_detail', pk=pk)
 
     staff_users = User.objects.filter(is_staff=True).select_related('profile') if can_assign(request.user) else []
-    status_events = _get_status_events(ticket)
-    resolved_event = next((event for event in status_events if event.action in ['resolved', 'closed']), None)
 
     return render(request, 'ticket_detail.html', {
         'ticket': ticket,
         'comments': comments,
         'related_articles': related_articles,
         'staff_users': staff_users,
-        'status_events': status_events,
-        'resolved_event': resolved_event,
         'status_choices': Ticket.STATUS_CHOICES,
         'category_choices': Ticket.CATEGORY_CHOICES,
         'category_tree_json': json.dumps(CATEGORY_TREE),
@@ -527,7 +374,6 @@ def ticket_edit(request, pk):
                 if ticket.status == 'resolved' and not ticket.resolved_at:
                     ticket.resolved_at = timezone.now()
             ticket.save()
-            _log_ticket_event(ticket, request.user, 'status_changed', from_status='', to_status=ticket.status, note='Ticket edited.')
             messages.success(request, f'Ticket #{ticket.id} updated.')
             return redirect('ticket_detail', pk=pk)
         except Exception as e:
@@ -618,7 +464,6 @@ def create_ticket(request):
                         )
 
                 notify_ticket_received(ticket)
-                _log_ticket_event(ticket, None, 'created', to_status='open', note=f'Ticket created via {channel}.')
 
                 try:
                     assignee = auto_assign(ticket)
@@ -658,8 +503,8 @@ def live_dashboard(request):
     closed = all_tickets.filter(status__in=['resolved','closed'])
     sla_ok = sum(1 for t in closed if t.resolved_at and t.resolved_at <= t.sla_deadline)
     sla_compliance = round((sla_ok/closed.count())*100) if closed.exists() else 100
-    times = [t.resolution_time_seconds for t in all_tickets.filter(resolved_at__isnull=False) if t.resolution_time_seconds is not None]
-    avg_resolution = round(sum(times)/len(times)) if times else 0
+    times = [t.resolution_time_hours for t in all_tickets.filter(resolved_at__isnull=False) if t.resolution_time_hours]
+    avg_resolution = round(sum(times)/len(times),1) if times else 0
     total_assigned = all_tickets.exclude(assigned_to__isnull=True).count()
     productivity = round((resolved_t/total_assigned)*100) if total_assigned > 0 else 0
     sla_breached = sum(1 for t in all_tickets.filter(status__in=['open','in_progress']) if t.is_sla_breached)
@@ -705,137 +550,3 @@ def item_api(request):
     sub = request.GET.get('subcategory','')
     data = CATEGORY_TREE.get(cat,{}).get('subcategories',{}).get(sub,[])
     return JsonResponse({'items': data})
-
-
-
-
-@login_required
-def dashboard_snapshot_api(request):
-    all_tickets = Ticket.objects.select_related('assigned_to').all()
-    data = {
-        'open': all_tickets.filter(status='open').count(),
-        'in_progress': all_tickets.filter(status='in_progress').count(),
-        'resolved': all_tickets.filter(status='resolved').count(),
-        'total': all_tickets.count(),
-        'unassigned': all_tickets.filter(assigned_to__isnull=True, status='open').count(),
-        'my_open': all_tickets.filter(assigned_to=request.user).exclude(status__in=['resolved', 'closed']).count(),
-    }
-    return JsonResponse(data)
-
-
-@login_required
-def ticket_list_snapshot_api(request):
-    tickets = Ticket.objects.select_related('assigned_to').all()
-    q = request.GET.get('q','').strip()
-    status_filter = request.GET.get('status')
-    priority_filter = request.GET.get('priority')
-    category_filter = request.GET.get('category')
-    assigned_filter = request.GET.get('mine')
-    unassigned_filter = request.GET.get('unassigned')
-
-    if q:
-        tickets = tickets.filter(Q(title__icontains=q)|Q(description__icontains=q)|Q(user_email__icontains=q)|Q(requester_name__icontains=q))
-    if status_filter:
-        tickets = tickets.filter(status=status_filter)
-    if priority_filter:
-        tickets = tickets.filter(priority=priority_filter)
-    if category_filter:
-        tickets = tickets.filter(category=category_filter)
-    if assigned_filter == '1':
-        tickets = tickets.filter(assigned_to=request.user)
-    if unassigned_filter == '1':
-        tickets = tickets.filter(assigned_to__isnull=True)
-
-    items = []
-    for t in tickets.order_by('-created_at')[:50]:
-        items.append({
-            'id': t.id,
-            'title': t.title,
-            'status': t.get_status_display(),
-            'priority': t.get_priority_display(),
-            'requester': t.requester_name or t.user_email,
-            'category': t.category_display,
-            'assigned_to': (t.assigned_to.get_full_name() or t.assigned_to.username) if t.assigned_to else 'Unassigned',
-            'created_at': t.created_at.isoformat(),
-            'url': f'/tickets/{t.id}/',
-        })
-    return JsonResponse({'count': tickets.count(), 'items': items})
-
-
-@login_required
-def protected_media(request, path):
-    """
-    Serve media files from MEDIA_ROOT for authenticated users.
-    Prevent path traversal and return the correct mime type.
-    """
-    requested = (Path(settings.MEDIA_ROOT) / path).resolve()
-    media_root = Path(settings.MEDIA_ROOT).resolve()
-
-    if media_root not in requested.parents and requested != media_root:
-        raise Http404("Invalid media path")
-
-    if not requested.exists() or not requested.is_file():
-        raise Http404("File not found")
-
-    content_type, _ = mimetypes.guess_type(str(requested))
-    return FileResponse(open(requested, 'rb'), content_type=content_type or 'application/octet-stream')
-
-
-
-def first_time_setup(request):
-    if User.objects.exists():
-        return redirect('login')
-
-    if request.method == 'POST':
-        full_name = (request.POST.get('full_name') or '').strip()
-        email = (request.POST.get('email') or '').strip()
-        username = (request.POST.get('username') or '').strip()
-        password = request.POST.get('password') or ''
-        confirm_password = request.POST.get('confirm_password') or ''
-
-        if not full_name or not email or not username or not password or not confirm_password:
-            messages.error(request, 'All fields are required.')
-            return render(request, 'setup_first_admin.html')
-
-        if password != confirm_password:
-            messages.error(request, 'Passwords do not match.')
-            return render(request, 'setup_first_admin.html')
-
-        if User.objects.filter(username=username).exists():
-            messages.error(request, 'That username is already in use.')
-            return render(request, 'setup_first_admin.html')
-
-        if User.objects.filter(email=email).exists():
-            messages.error(request, 'That email address is already in use.')
-            return render(request, 'setup_first_admin.html')
-
-        parts = full_name.split()
-        first_name = parts[0]
-        last_name = ' '.join(parts[1:]) if len(parts) > 1 else ''
-
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            first_name=first_name,
-            last_name=last_name,
-        )
-        user.is_staff = True
-        user.is_superuser = True
-        user.save()
-
-        profile = getattr(user, 'profile', None)
-        if profile:
-            profile.role = 'superadmin'
-            profile.save(update_fields=['role'])
-        else:
-            Profile.objects.create(user=user, role='superadmin')
-
-        auth_user = authenticate(request, username=username, password=password)
-        if auth_user is not None:
-            login(request, auth_user)
-
-        messages.success(request, 'Administrator account created successfully.')
-        return redirect('dashboard')
-
-    return render(request, 'setup_first_admin.html')

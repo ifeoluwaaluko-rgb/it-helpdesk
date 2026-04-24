@@ -1,16 +1,12 @@
 import html
 import re
 import json
-from html.parser import HTMLParser
-from urllib.parse import urlparse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from .models import Article, ArticleRevision, ArticleFeedback, ArticleAttachment
-from .forms import ArticleCreateForm, ArticleEditForm, validate_knowledge_attachments
-from tickets.permissions import can_delete_edit, can_manage_knowledge, get_role
 from tickets.models import Ticket
 
 def _normalize_rich_text(content):
@@ -45,82 +41,16 @@ def _normalize_rich_text(content):
 
 
 def _get_role(user):
-    return get_role(user)
-
-
-class _SafeHtmlSanitizer(HTMLParser):
-    ALLOWED_TAGS = {
-        'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li',
-        'h2', 'h3', 'blockquote', 'code', 'pre', 'a', 'img',
-    }
-    VOID_TAGS = {'br', 'img'}
-    ALLOWED_ATTRS = {
-        'a': {'href', 'title', 'target', 'rel'},
-        'img': {'src', 'alt'},
-    }
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.parts = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag not in self.ALLOWED_TAGS:
-            return
-        cleaned = []
-        for key, value in attrs:
-            if key not in self.ALLOWED_ATTRS.get(tag, set()):
-                continue
-            value = self._clean_attr(tag, key, value)
-            if value is None:
-                continue
-            cleaned.append((key, value))
-        attr_text = ''.join(f' {key}="{html.escape(value, quote=True)}"' for key, value in cleaned)
-        self.parts.append(f'<{tag}{attr_text}>')
-
-    def handle_endtag(self, tag):
-        if tag in self.ALLOWED_TAGS and tag not in self.VOID_TAGS:
-            self.parts.append(f'</{tag}>')
-
-    def handle_data(self, data):
-        self.parts.append(html.escape(data))
-
-    def handle_entityref(self, name):
-        self.parts.append(f'&{name};')
-
-    def handle_charref(self, name):
-        self.parts.append(f'&#{name};')
-
-    def _clean_attr(self, tag, key, value):
-        value = (value or '').strip()
-        if not value:
-            return None
-        if tag == 'a' and key == 'href':
-            parsed = urlparse(value)
-            if parsed.scheme and parsed.scheme not in {'http', 'https', 'mailto'}:
-                return None
-        if tag == 'img' and key == 'src':
-            if value.startswith('/media/'):
-                return value
-            if re.match(r'^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+$', value):
-                return value
-            return None
-        if tag == 'a' and key == 'target':
-            return '_blank' if value == '_blank' else None
-        if tag == 'a' and key == 'rel':
-            return 'noopener noreferrer'
-        return value
-
-
-def _sanitize_rich_text(content):
-    parser = _SafeHtmlSanitizer()
-    parser.feed(content or '')
-    parser.close()
-    return ''.join(parser.parts)
+    try:
+        return user.profile.role
+    except Exception:
+        return 'associate'
 
 
 def _can_delete_article(user, article):
     """Manager, Consultant, Senior can delete any article. Others only their own."""
-    if can_delete_edit(user):
+    role = _get_role(user)
+    if role in ('manager', 'consultant', 'senior'):
         return True
     return article.created_by == user
 
@@ -147,7 +77,6 @@ def article_list(request):
         'category_choices': Article.CATEGORY_CHOICES,
         'q': q,
         'selected_category': category,
-        'can_create': can_manage_knowledge(request.user),
     })
 
 
@@ -162,10 +91,9 @@ def article_detail(request, pk):
     can_delete = _can_delete_article(request.user, article)
     return render(request, 'knowledge/article_detail.html', {
         'article': article,
-        'decoded_content': _sanitize_rich_text(_normalize_rich_text(article.content)),
+        'decoded_content': _normalize_rich_text(article.content),
         'user_feedback': user_feedback,
         'can_delete': can_delete,
-        'can_edit': can_manage_knowledge(request.user),
     })
 
 
@@ -200,72 +128,54 @@ def revision_detail(request, pk, rev_pk):
     return render(request, 'knowledge/revision_detail.html', {
         'article': article,
         'revision': revision,
-        'decoded_revision_content': _sanitize_rich_text(_normalize_rich_text(revision.content)),
+        'decoded_revision_content': _normalize_rich_text(revision.content),
     })
 
 
 @login_required
 def create_article(request, ticket_id=None):
-    if not can_manage_knowledge(request.user):
-        messages.error(request, 'Only helpdesk staff can create knowledge articles.')
-        return redirect('article_list')
-
     ticket = None
     if ticket_id:
         ticket = get_object_or_404(Ticket, pk=ticket_id)
 
-    initial = {
-        'title': ticket.title if ticket else '',
-        'category': ticket.category if ticket else 'other',
-        'content': f"<p><strong>Problem:</strong> {ticket.description}</p><p><strong>Solution:</strong></p>" if ticket else '',
-        'source_ticket': ticket.pk if ticket else '',
-    }
-    form = ArticleCreateForm(request.POST or None, initial=initial)
-
     if request.method == 'POST':
-        if form.is_valid():
-            try:
-                attachments = request.FILES.getlist('attachments')
-                validate_knowledge_attachments(attachments)
-                safe_content = _sanitize_rich_text(_normalize_rich_text(form.cleaned_data['content']))
-                article = Article.objects.create(
-                    title=form.cleaned_data['title'],
-                    content=safe_content,
-                    category=form.cleaned_data['category'],
-                    tags=form.cleaned_data['tags'],
-                    created_by=request.user,
-                    last_modified_by=request.user,
-                    source_ticket_id=form.cleaned_data.get('source_ticket') or None,
-                )
-                ArticleRevision.objects.create(
+        title = request.POST.get('title', '').strip()
+        content = _normalize_rich_text(request.POST.get('content', ''))
+        category = request.POST.get('category', 'other')
+        tags = request.POST.get('tags', '').strip()
+        source_id = request.POST.get('source_ticket')
+
+        if title and content:
+            article = Article.objects.create(
+                title=title,
+                content=content,
+                category=category,
+                tags=tags,
+                created_by=request.user,
+                last_modified_by=request.user,
+                source_ticket_id=source_id if source_id else None,
+            )
+            ArticleRevision.objects.create(
+                article=article,
+                title=title,
+                content=content,
+                tags=tags,
+                category=category,
+                edited_by=request.user,
+                revision_note='Initial version',
+            )
+            for f in request.FILES.getlist('attachments'):
+                ArticleAttachment.objects.create(
                     article=article,
-                    title=form.cleaned_data['title'],
-                    content=safe_content,
-                    tags=form.cleaned_data['tags'],
-                    category=form.cleaned_data['category'],
-                    edited_by=request.user,
-                    revision_note='Initial version',
+                    file=f,
+                    filename=f.name,
+                    uploaded_by=request.user,
                 )
-                for uploaded in attachments:
-                    ArticleAttachment.objects.create(
-                        article=article,
-                        file=uploaded,
-                        filename=uploaded.name,
-                        uploaded_by=request.user,
-                    )
-                messages.success(request, f'Article "{article.title}" saved to knowledge base.')
-                return redirect('article_detail', pk=article.pk)
-            except Exception as exc:
-                messages.error(request, f'Could not save article: {exc}')
-        else:
-            for errors in form.errors.values():
-                for error in errors:
-                    messages.error(request, error)
+            messages.success(request, f'Article "{article.title}" saved to knowledge base.')
+            return redirect('article_detail', pk=article.pk)
 
     return render(request, 'knowledge/create_article.html', {
         'ticket': ticket,
-        'form': form,
-        'editor_content': form['content'].value() or '',
         'category_choices': Article.CATEGORY_CHOICES,
     })
 
@@ -273,67 +183,48 @@ def create_article(request, ticket_id=None):
 @login_required
 def edit_article(request, pk):
     article = get_object_or_404(Article, pk=pk)
-    if not can_manage_knowledge(request.user):
-        messages.error(request, 'Only helpdesk staff can edit knowledge articles.')
-        return redirect('article_detail', pk=pk)
-
-    attachments = article.attachments.all()
-    initial = {
-        'title': article.title,
-        'content': article.content,
-        'category': article.category,
-        'tags': article.tags,
-        'revision_note': '',
-        'delete_attachments': [],
-    }
-    form = ArticleEditForm(request.POST or None, attachments=attachments, initial=initial)
 
     if request.method == 'POST':
-        if form.is_valid():
-            try:
-                uploaded_files = request.FILES.getlist('attachments')
-                validate_knowledge_attachments(uploaded_files)
-                content = _sanitize_rich_text(_normalize_rich_text(form.cleaned_data['content']))
-                ArticleRevision.objects.create(
+        title = request.POST.get('title', '').strip()
+        content = _normalize_rich_text(request.POST.get('content', ''))
+        category = request.POST.get('category', article.category)
+        tags = request.POST.get('tags', '').strip()
+        revision_note = request.POST.get('revision_note', '').strip()
+
+        if title and content:
+            ArticleRevision.objects.create(
+                article=article,
+                title=article.title,
+                content=article.content,
+                tags=article.tags,
+                category=article.category,
+                edited_by=request.user,
+                revision_note=revision_note or 'No note provided',
+            )
+            article.title = title
+            article.content = content
+            article.category = category
+            article.tags = tags
+            article.last_modified_by = request.user
+            article.save()
+            for f in request.FILES.getlist('attachments'):
+                ArticleAttachment.objects.create(
                     article=article,
-                    title=article.title,
-                    content=article.content,
-                    tags=article.tags,
-                    category=article.category,
-                    edited_by=request.user,
-                    revision_note=form.cleaned_data['revision_note'] or 'No note provided',
+                    file=f,
+                    filename=f.name,
+                    uploaded_by=request.user,
                 )
-                article.title = form.cleaned_data['title']
-                article.content = content
-                article.category = form.cleaned_data['category']
-                article.tags = form.cleaned_data['tags']
-                article.last_modified_by = request.user
-                article.save()
-                for uploaded in uploaded_files:
-                    ArticleAttachment.objects.create(
-                        article=article,
-                        file=uploaded,
-                        filename=uploaded.name,
-                        uploaded_by=request.user,
-                    )
-                delete_ids = form.cleaned_data.get('delete_attachments') or []
-                if delete_ids:
-                    ArticleAttachment.objects.filter(pk__in=delete_ids, article=article).delete()
-                messages.success(request, 'Article updated successfully.')
-                return redirect('article_detail', pk=article.pk)
-            except Exception as exc:
-                messages.error(request, f'Could not update article: {exc}')
-        else:
-            for errors in form.errors.values():
-                for error in errors:
-                    messages.error(request, error)
+            delete_ids = request.POST.getlist('delete_attachments')
+            if delete_ids:
+                ArticleAttachment.objects.filter(pk__in=delete_ids, article=article).delete()
+            messages.success(request, 'Article updated successfully.')
+            return redirect('article_detail', pk=article.pk)
 
     return render(request, 'knowledge/edit_article.html', {
         'article': article,
-        'form': form,
-        'editor_content': form['content'].value() or article.content,
+        'decoded_content': _normalize_rich_text(article.content),
         'category_choices': Article.CATEGORY_CHOICES,
-        'attachments': attachments,
+        'attachments': article.attachments.all(),
     })
 
 

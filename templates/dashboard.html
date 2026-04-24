@@ -2,8 +2,6 @@
 {% block title %}Dashboard — IT Helpdesk{% endblock %}
 {% block breadcrumb %}Dashboard{% endblock %}
 {% block content %}
-<div data-dashboard-page="1"></div>
-<div id="dashboard-live-region">
 
 {% if is_manager %}
 <!-- ══ MANAGER VIEW ══ -->
@@ -38,6 +36,13 @@
     </div>
     <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_resolution }}h</p><p class="text-xs text-[#68737d]">Avg Resolution</p></div>
   </div>
+
+  <div class="zd-card p-4 flex items-center gap-3">
+    <div class="w-9 h-9 rounded bg-cyan-100 flex items-center justify-center text-cyan-700 flex-shrink-0">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div>
+    <div><p class="text-lg font-bold text-[#2f3941]">{{ stats.avg_first_response }}m</p><p class="text-xs text-[#68737d]">Avg First Response</p></div>
+  </div>
   <div class="zd-card p-4 flex items-center gap-3">
     <div class="w-9 h-9 rounded {% if stats.unassigned > 0 %}bg-orange-100{% else %}bg-gray-100{% endif %} flex items-center justify-center {% if stats.unassigned > 0 %}text-orange-500{% else %}text-gray-500{% endif %} flex-shrink-0">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
@@ -56,9 +61,7 @@
   <!-- Chart -->
   <div class="lg:col-span-2 zd-card p-5">
     <h3 class="text-sm font-semibold text-[#2f3941] mb-4">Ticket Volume — Last 7 Days</h3>
-    <canvas id="volumeChart" height="80"
-      data-labels="{{ chart_labels|safe }}"
-      data-values="{{ chart_data|safe }}"></canvas>
+    <canvas id="volumeChart" height="80"></canvas>
   </div>
   <!-- Category -->
   <div class="zd-card p-5">
@@ -67,12 +70,33 @@
       {% for item in category_counts %}
       <div>
         <div class="flex justify-between text-xs mb-1"><span class="text-[#68737d] capitalize">{{ item.category }}</span><span class="font-semibold text-[#2f3941]">{{ item.count }}</span></div>
-        <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-[#1f73b7] rounded-full" style="width:min({% if stats.total %}{% widthratio item.count stats.total 100 %}{% else %}0{% endif %}%, 100%)"></div></div>
+        <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-[#1f73b7] rounded-full" style="width:{% if stats.total %}{% widthratio item.count stats.total 100 %}{% else %}0{% endif %}%"></div></div>
       </div>
       {% endfor %}
     </div>
   </div>
 </div>
+
+
+{% if recurring_issues %}
+<div class="zd-card p-5 mb-4">
+  <div class="flex items-center justify-between mb-3">
+    <h3 class="text-sm font-semibold text-[#2f3941]">Recurring Issues (Last 7 Days)</h3>
+    <span class="text-xs text-[#68737d]">Top repeated patterns</span>
+  </div>
+  <div class="space-y-2">
+    {% for issue in recurring_issues %}
+    <div class="flex items-center justify-between bg-[#f9fafb] border border-[#e9ebed] rounded-lg px-3 py-2">
+      <div>
+        <p class="text-sm font-medium text-[#2f3941]">{{ issue.label }}</p>
+        <p class="text-xs text-[#68737d]">{{ issue.category }}</p>
+      </div>
+      <span class="tag">{{ issue.count }} tickets</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
   <!-- Staff Workload -->
@@ -89,7 +113,7 @@
             <p class="text-xs text-[#2f3941] font-medium truncate">{{ s.get_full_name|default:s.username }}</p>
             <span class="text-xs font-bold ml-2 {% if s.open_count > 5 %}text-red-500{% elif s.open_count > 2 %}text-orange-500{% else %}text-green-600{% endif %}">{{ s.open_count }}</span>
           </div>
-          <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:min({% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%, 100%)"></div></div>
+          <div class="h-1.5 bg-gray-100 rounded-full"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:{% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%"></div></div>
         </div>
       </div>
       {% endfor %}
@@ -103,12 +127,8 @@
       {% for cat, hrs in cat_resolution.items %}
       <div class="flex items-center gap-3">
         <span class="text-xs text-[#68737d] w-20 capitalize flex-shrink-0">{{ cat }}</span>
-        <div class="flex-1 min-w-0 overflow-hidden">
-          <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div class="h-full bg-[#1f8c8c] rounded-full" style="width:min({% widthratio hrs 48 100 %}%, 100%)"></div>
-          </div>
-        </div>
-        <span class="text-xs font-semibold text-[#2f3941] w-12 text-right flex-shrink-0">{{ hrs }}h</span>
+        <div class="flex-1 h-1.5 bg-gray-100 rounded-full"><div class="h-full bg-[#1f8c8c] rounded-full" style="width:{% widthratio hrs 48 100 %}%"></div></div>
+        <span class="text-xs font-semibold text-[#2f3941] w-8 text-right">{{ hrs }}h</span>
       </div>
       {% endfor %}
     </div>
@@ -184,7 +204,6 @@
         <th class="px-5 py-2.5">Priority</th><th class="px-5 py-2.5">Status</th><th class="px-5 py-2.5">Assignee</th>
       </tr></thead>
       <tbody class="divide-y divide-[#e9ebed]">
-      {% if recent_tickets %}
       {% for t in recent_tickets %}
       <tr class="hover:bg-[#f9fafb] {% if t.id in sla_breached_ids %}bg-red-50{% endif %}">
         <td class="px-5 py-3 text-[#68737d] text-xs">#{{ t.id }}</td>
@@ -197,94 +216,21 @@
         <td class="px-5 py-3">{% include 'partials/status_badge.html' with status=t.status %}</td>
         <td class="px-5 py-3 text-xs text-[#68737d]">{{ t.assigned_to.get_full_name|default:t.assigned_to.username|default:"—" }}</td>
       </tr>
-      {% endfor %}
-      {% else %}
+      {% empty %}
       <tr><td colspan="6" class="px-5 py-8 text-center text-[#68737d] text-sm">No tickets. 🎉</td></tr>
-      {% endif %}
+      {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
 
-</div>{# end dashboard-live-region #}
-{% endblock %}
-
-{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-(function () {
-  var s = document.createElement('script');
-  s.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-  s.onload = boot;
-  document.head.appendChild(s);
-
-  var chartInstance = null;
-
-  function initChart() {
-    var canvas = document.getElementById('volumeChart');
-    if (!canvas) return;
-    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-    var existing = Chart.getChart ? Chart.getChart(canvas) : null;
-    if (existing) existing.destroy();
-    try {
-      var labels = JSON.parse(canvas.getAttribute('data-labels') || '[]');
-      var values = JSON.parse(canvas.getAttribute('data-values') || '[]');
-    } catch(e) { return; }
-    chartInstance = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: 'Tickets',
-          data: values,
-          backgroundColor: 'rgba(31,115,183,0.18)',
-          borderColor: '#1f73b7',
-          borderWidth: 2,
-          borderRadius: 4,
-          hoverBackgroundColor: 'rgba(31,115,183,0.35)',
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: { beginAtZero: true, ticks: { stepSize: 1, color: '#68737d', font: { size: 11 } }, grid: { color: '#e9ebed' } },
-          x: { ticks: { color: '#68737d', font: { size: 11 } }, grid: { display: false } }
-        }
-      }
-    });
-  }
-
-  function boot() {
-    if (!document.querySelector('[data-dashboard-page]')) return;
-    var region = document.getElementById('dashboard-live-region');
-    if (!region) return;
-    initChart();
-
-    var busy = false;
-    async function silentRefresh() {
-      if (busy || document.hidden) return;
-      busy = true;
-      try {
-        var url = new URL(window.location.href);
-        url.searchParams.set('_ts', Date.now());
-        var resp = await fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' });
-        if (!resp.ok) return;
-        var html = await resp.text();
-        var doc = new DOMParser().parseFromString(html, 'text/html');
-        var next = doc.getElementById('dashboard-live-region');
-        if (!next) return;
-        region.innerHTML = next.innerHTML;
-        if (window.upgradeDateNodes) window.upgradeDateNodes(region);
-        initChart();
-      } catch(e) {
-        console.debug('Dashboard silent refresh skipped', e);
-      } finally {
-        busy = false;
-      }
-    }
-    setInterval(silentRefresh, 5000);
-  }
-})();
+const ctx = document.getElementById('volumeChart');
+if(ctx) new Chart(ctx, {
+  type:'bar',
+  data:{labels:{{ chart_labels|safe }},datasets:[{label:'Tickets',data:{{ chart_data|safe }},backgroundColor:'rgba(31,115,183,0.85)',borderRadius:4,borderSkipped:false}]},
+  options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1},grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}
+});
 </script>
 {% endblock %}

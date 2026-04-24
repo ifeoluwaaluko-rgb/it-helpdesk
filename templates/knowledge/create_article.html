@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}New Knowledge Article{% endblock %}
+{% block title %}New Knowledge Article – IT Helpdesk{% endblock %}
 {% block content %}
 
 <div class="max-w-3xl mx-auto">
@@ -15,13 +15,13 @@
   <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-8">
     <form method="post" enctype="multipart/form-data" class="space-y-5" id="article-form">
       {% csrf_token %}
-      {% if ticket %}<input type="hidden" name="source_ticket" value="{{ form.source_ticket.value|default:ticket.pk }}">{% endif %}
-      <input type="hidden" name="content" id="content-hidden" value="{{ form.content.value|default:'' }}">
+      {% if ticket %}<input type="hidden" name="source_ticket" value="{{ ticket.pk }}">{% endif %}
+      <input type="hidden" name="content" id="content-hidden">
 
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Article Title <span class="text-red-500">*</span></label>
         <input name="title" type="text" required
-          value="{{ form.title.value|default:'' }}"
+          value="{{ ticket.title|default:'' }}"
           placeholder="e.g. How to fix VPN connection on Windows"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
       </div>
@@ -30,20 +30,21 @@
         <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
         <select name="category" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
           {% for val, label in category_choices %}
-          <option value="{{ val }}" {% if form.category.value == val %}selected{% endif %}>{{ label }}</option>
+          <option value="{{ val }}" {% if ticket and ticket.category == val %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
 
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-2">Content <span class="text-red-500">*</span></label>
+        <!-- Quill toolbar -->
         <div id="editor-toolbar" class="border border-gray-200 border-b-0 rounded-t-lg bg-gray-50 px-2 py-1 flex flex-wrap gap-1 items-center">
-          <button type="button" class="ql-btn font-bold text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="bold">B</button>
-          <button type="button" class="ql-btn italic text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="italic">I</button>
-          <button type="button" class="ql-btn underline text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="underline">U</button>
+          <button type="button" class="ql-btn font-bold text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="bold" title="Bold">B</button>
+          <button type="button" class="ql-btn italic text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="italic" title="Italic">I</button>
+          <button type="button" class="ql-btn underline text-xs px-2 py-1 rounded hover:bg-gray-200 underline" data-cmd="underline" title="Underline">U</button>
           <div class="w-px h-5 bg-gray-300 mx-1"></div>
-          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="insertUnorderedList">List</button>
-          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="insertOrderedList">1. List</button>
+          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="insertUnorderedList" title="Bullet List">• List</button>
+          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-gray-200" data-cmd="insertOrderedList" title="Numbered List">1. List</button>
           <div class="w-px h-5 bg-gray-300 mx-1"></div>
           <select id="heading-select" class="text-xs border border-gray-200 rounded px-1 py-1 focus:outline-none">
             <option value="">Paragraph</option>
@@ -51,31 +52,34 @@
             <option value="h3">Heading 3</option>
           </select>
           <div class="w-px h-5 bg-gray-300 mx-1"></div>
-          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-gray-200" onclick="insertLink()">Link</button>
-          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-blue-100 text-blue-700 font-medium" onclick="document.getElementById('inline-img-input').click()">Inline Image</button>
+          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-gray-200" onclick="insertLink()" title="Link">🔗 Link</button>
+          <button type="button" class="ql-btn text-xs px-2 py-1 rounded hover:bg-blue-100 text-blue-700 font-medium" onclick="document.getElementById('inline-img-input').click()" title="Embed image in text">🖼 Inline Image</button>
           <input type="file" id="inline-img-input" accept="image/*" class="hidden" onchange="embedInlineImage(this)">
         </div>
+        <!-- Editable area -->
         <div id="editor-area"
           contenteditable="true"
           class="border border-gray-200 rounded-b-lg px-4 py-3 text-sm text-gray-800 min-h-[240px] focus:outline-none focus:ring-2 focus:ring-blue-400 prose prose-sm max-w-none"
-          style="line-height:1.7"></div>
-        {{ editor_content|json_script:"article-content-json" }}
-        <p class="text-xs text-gray-400 mt-1">Use attachments below for uploaded files. Inline images are embedded into the article body.</p>
+          style="line-height:1.7"
+          {% if ticket %}
+          {% endif %}
+        >{% if ticket %}<p><strong>Problem:</strong> {{ ticket.description }}</p><p><strong>Solution:</strong></p>{% endif %}</div>
+        <p class="text-xs text-gray-400 mt-1">Use the toolbar to format text. Click "🖼 Inline Image" to embed an image directly in the content.</p>
       </div>
 
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">Tags</label>
         <input name="tags" type="text"
-          value="{{ form.tags.value|default:'' }}"
-          placeholder="vpn, windows, remote-access"
+          placeholder="vpn, windows, remote-access  (comma-separated)"
           class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
       </div>
 
+      <!-- File attachments -->
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">Attachments</label>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Attachments <span class="text-gray-400 font-normal">(images, PDFs, docs — any file)</span></label>
         <div id="drop-zone" class="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-blue-300 transition cursor-pointer" onclick="document.getElementById('file-input').click()">
-          <p class="text-sm text-gray-400">Click to browse or drag files here</p>
-          <p class="text-xs text-gray-300 mt-1">Images, PDFs, Word docs, spreadsheets, zip files</p>
+          <p class="text-sm text-gray-400">📎 Click to browse or drag files here</p>
+          <p class="text-xs text-gray-300 mt-1">Images, PDFs, Word docs, etc.</p>
         </div>
         <input type="file" id="file-input" name="attachments" multiple class="hidden" onchange="updateFileList(this)">
         <ul id="file-list" class="mt-2 space-y-1 text-sm text-gray-600"></ul>
@@ -83,7 +87,7 @@
 
       <div class="flex gap-3 pt-2">
         <button type="submit" onclick="syncContent()" class="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition">
-          Save Article
+          📚 Save Article
         </button>
         <a href="{% url 'article_list' %}" class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2.5">Cancel</a>
       </div>
@@ -91,7 +95,19 @@
   </div>
 </div>
 
+<!-- Image resize popover -->
+<div id="img-resize-popover" class="hidden fixed z-50 bg-white border border-gray-200 rounded-xl shadow-xl px-3 py-2 flex gap-1 items-center" style="pointer-events:auto;">
+  <span class="text-xs text-gray-400 mr-1">Size:</span>
+  <button onclick="resizeImg('25%')"  class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Small</button>
+  <button onclick="resizeImg('50%')"  class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Medium</button>
+  <button onclick="resizeImg('75%')"  class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Large</button>
+  <button onclick="resizeImg('100%')" class="text-xs px-2 py-1 rounded hover:bg-blue-50 hover:text-blue-700 border border-gray-200">Original</button>
+  <div class="w-px h-4 bg-gray-200 mx-1"></div>
+  <button onclick="hidePopover()" class="text-xs text-gray-400 hover:text-red-500 px-1">✕</button>
+</div>
+
 <script>
+// Toolbar commands
 document.querySelectorAll('.ql-btn[data-cmd]').forEach(btn => {
   btn.addEventListener('mousedown', e => {
     e.preventDefault();
@@ -116,9 +132,10 @@ function embedInlineImage(input) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = function(e) {
-    const img = `<img src="${e.target.result}" style="width:100%;max-width:100%;border-radius:8px;margin:8px 0;" alt="embedded image">`;
+    const img = `<img src="${e.target.result}" style="width:100%;max-width:100%;border-radius:8px;margin:8px 0;cursor:pointer;" data-orig-size="100%" alt="embedded image">`;
     document.getElementById('editor-area').focus();
     document.execCommand('insertHTML', false, img);
+    bindImageClicks();
   };
   reader.readAsDataURL(file);
   input.value = '';
@@ -129,7 +146,7 @@ function updateFileList(input) {
   Array.from(input.files).forEach(f => {
     const li = document.createElement('li');
     li.className = 'flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5 text-xs';
-    li.innerHTML = `<span class="font-medium">${f.name}</span> <span class="text-gray-400">(${(f.size/1024).toFixed(1)} KB)</span>`;
+    li.innerHTML = `<span>${f.type.startsWith('image/') ? '🖼' : '📄'}</span> <span class="font-medium">${f.name}</span> <span class="text-gray-400">(${(f.size/1024).toFixed(1)} KB)</span>`;
     list.appendChild(li);
   });
 }
@@ -144,10 +161,49 @@ dz.addEventListener('drop', e => {
   updateFileList(fi);
 });
 document.getElementById('article-form').addEventListener('submit', syncContent);
-const rawContentNode = document.getElementById('article-content-json');
-const rawContent = rawContentNode ? JSON.parse(rawContentNode.textContent) : '';
-if (rawContent) {
-  document.getElementById('editor-area').innerHTML = rawContent;
+
+// ── Image resize popover ──────────────────────────────────────
+let _selectedImg = null;
+const popover = document.getElementById('img-resize-popover');
+
+function bindImageClicks() {
+  document.querySelectorAll('#editor-area img').forEach(img => {
+    img.style.cursor = 'pointer';
+    img.onclick = function(e) {
+      e.stopPropagation();
+      _selectedImg = img;
+      // Highlight selected
+      document.querySelectorAll('#editor-area img').forEach(i => i.style.outline = '');
+      img.style.outline = '2px solid #1f73b7';
+      // Position popover above the image
+      const rect = img.getBoundingClientRect();
+      popover.style.left = rect.left + window.scrollX + 'px';
+      popover.style.top  = (rect.top + window.scrollY - 48) + 'px';
+      popover.classList.remove('hidden');
+    };
+  });
 }
+
+function resizeImg(pct) {
+  if (!_selectedImg) return;
+  _selectedImg.style.width = pct;
+  _selectedImg.style.maxWidth = '100%';
+  _selectedImg.dataset.origSize = pct;
+  syncContent();
+}
+
+function hidePopover() {
+  popover.classList.add('hidden');
+  if (_selectedImg) { _selectedImg.style.outline = ''; _selectedImg = null; }
+}
+
+document.addEventListener('click', function(e) {
+  if (!popover.contains(e.target) && !e.target.closest('#editor-area img')) {
+    hidePopover();
+  }
+});
+
+// Bind images already in editor on page load (edit mode)
+bindImageClicks();
 </script>
 {% endblock %}

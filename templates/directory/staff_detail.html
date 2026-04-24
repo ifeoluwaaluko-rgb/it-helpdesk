@@ -1,11 +1,12 @@
 {% extends 'base.html' %}
-{% block title %}{{ member.full_name }} - Directory{% endblock %}
+{% block title %}{{ member.full_name }} – Directory{% endblock %}
 {% block content %}
 
 <div class="mb-5">
-  <a href="{% url 'staff_list' %}" class="text-sm text-gray-400 hover:text-blue-600">Back to Staff Directory</a>
+  <a href="{% url 'staff_list' %}" class="text-sm text-gray-400 hover:text-blue-600">← Staff Directory</a>
 </div>
 
+<!-- Profile Hero -->
 <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-5">
   <div class="h-24 bg-gradient-to-r from-[#03363d] to-[#1f73b7]"></div>
   <div class="px-6 pb-6">
@@ -14,42 +15,41 @@
         {{ member.first_name|first|upper }}{{ member.last_name|first|upper }}
       </div>
       <div class="flex gap-2 pb-1">
-        {% if can_manage_directory %}
-        <a href="{% url 'staff_edit' member.pk %}" class="zd-btn zd-btn-secondary text-xs">Edit Profile</a>
-        {% endif %}
-        <a href="mailto:{{ member.email }}" class="zd-btn zd-btn-primary text-xs">Send Email</a>
+        <a href="{% url 'staff_edit' member.pk %}" class="zd-btn zd-btn-secondary text-xs">✏️ Edit Profile</a>
+        <a href="mailto:{{ member.email }}" class="zd-btn zd-btn-primary text-xs">✉ Send Email</a>
       </div>
     </div>
     <div class="mt-3">
       <div class="flex items-center gap-3 flex-wrap">
         <h1 class="text-2xl font-bold text-gray-900">{{ member.full_name }}</h1>
         <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold {% if member.is_active %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-500{% endif %}">
-          {% if member.is_active %}Active{% else %}Inactive{% endif %}
+          {% if member.is_active %}● Active{% else %}● Inactive{% endif %}
         </span>
       </div>
-      <p class="text-sm text-gray-500 mt-0.5">{{ member.job_title|default:"-" }}{% if member.department %} · {{ member.department.name }}{% endif %}</p>
+      <p class="text-sm text-gray-500 mt-0.5">{{ member.job_title|default:"—" }}{% if member.department %} · {{ member.department.name }}{% endif %}</p>
     </div>
     <div class="flex flex-wrap gap-3 mt-4">
       <span class="inline-flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-sm text-gray-700">
-        {{ member.email }}
+        ✉ {{ member.email }}
       </span>
       {% if member.phone %}
       <span class="inline-flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-sm text-gray-700">
-        {{ member.phone }}
+        📞 {{ member.phone }}
       </span>
       {% endif %}
       {% if member.department %}
       <span class="inline-flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-sm text-gray-700">
-        {{ member.department.name }}
+        🏢 {{ member.department.name }}
       </span>
       {% endif %}
       <span class="inline-flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-sm text-gray-700">
-        Added {{ member.created_at|date:"M d, Y" }}
+        📅 Added {{ member.created_at|date:"M d, Y" }}
       </span>
     </div>
   </div>
 </div>
 
+<!-- Stats row -->
 <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
   <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
     <p class="text-2xl font-black text-[#1f73b7]">{{ tickets.count }}</p>
@@ -67,10 +67,11 @@
   </div>
 </div>
 
+<!-- Tickets + Assets -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
   <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
     <div class="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
-      <h2 class="text-sm font-semibold text-gray-800">Recent Tickets</h2>
+      <h2 class="text-sm font-semibold text-gray-800">🎫 Recent Tickets</h2>
       <span class="text-xs text-gray-400">Last 10</span>
     </div>
     <div class="divide-y divide-gray-50">
@@ -94,7 +95,7 @@
 
   <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
     <div class="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
-      <h2 class="text-sm font-semibold text-gray-800">Assigned Assets</h2>
+      <h2 class="text-sm font-semibold text-gray-800">🖥 Assigned Assets</h2>
       <span class="text-xs text-gray-400">{{ member.assets.count }} total</span>
     </div>
     <div class="divide-y divide-gray-50">
