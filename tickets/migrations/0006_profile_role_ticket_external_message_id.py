@@ -1,13 +1,14 @@
 from django.db import migrations, models
 
 
-def sync_external_message_id(apps, schema_editor):
+def sync_external_message_id_state(apps, schema_editor):
     connection = schema_editor.connection
     table_name = "tickets_ticket"
+
     with connection.cursor() as cursor:
         description = connection.introspection.get_table_description(cursor, table_name)
-    column_names = {column.name for column in description}
 
+    column_names = {column.name for column in description}
     if "external_message_id" not in column_names:
         schema_editor.execute(
             "ALTER TABLE tickets_ticket "
@@ -59,7 +60,7 @@ class Migration(migrations.Migration):
         ),
         migrations.SeparateDatabaseAndState(
             database_operations=[
-                migrations.RunPython(sync_external_message_id, noop_reverse),
+                migrations.RunPython(sync_external_message_id_state, noop_reverse),
             ],
             state_operations=[
                 migrations.AddField(

@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
 {% block title %}Dashboard - IT Helpdesk{% endblock %}
 {% block breadcrumb %}Dashboard{% endblock %}
-{% block content %}
 
+{% block content %}
+<div id="dashboard-live-region">
 {% if is_manager %}
 <div class="flex items-center justify-between mb-5">
   <div>
@@ -105,7 +106,9 @@
             <p class="text-xs text-[#2f3941] font-medium truncate">{{ s.get_full_name|default:s.username }}</p>
             <span class="text-xs font-bold ml-2 {% if s.open_count > 5 %}text-red-500{% elif s.open_count > 2 %}text-orange-500{% else %}text-green-600{% endif %}">{{ s.open_count }}</span>
           </div>
-          <div class="h-1.5 bg-gray-100 rounded-full"><div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:{% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%"></div></div>
+          <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div class="h-full rounded-full {% if s.open_count > 5 %}bg-red-400{% elif s.open_count > 2 %}bg-orange-400{% else %}bg-green-400{% endif %}" style="width:{% if s.open_count %}{% widthratio s.open_count 10 100 %}{% else %}0{% endif %}%; max-width:100%;"></div>
+          </div>
         </div>
       </div>
       {% endfor %}
@@ -118,7 +121,7 @@
       {% for cat, hrs in cat_resolution.items %}
       <div class="flex items-center gap-3">
         <span class="text-xs text-[#68737d] w-20 capitalize flex-shrink-0">{{ cat }}</span>
-        <div class="flex-1 h-1.5 bg-gray-100 rounded-full"><div class="h-full bg-[#1f8c8c] rounded-full" style="width:{% widthratio hrs 48 100 %}%"></div></div>
+        <div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-[#1f8c8c] rounded-full" style="width:{% widthratio hrs 48 100 %}%; max-width:100%;"></div></div>
         <span class="text-xs font-semibold text-[#2f3941] w-8 text-right">{{ hrs }}h</span>
       </div>
       {% endfor %}
@@ -211,14 +214,74 @@
     </table>
   </div>
 </div>
+</div>
+{% endblock %}
 
+{% block extra_js %}
+{% if is_manager %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-const ctx = document.getElementById('volumeChart');
-if(ctx) new Chart(ctx, {
-  type:'bar',
-  data:{labels:{{ chart_labels|safe }},datasets:[{label:'Tickets',data:{{ chart_data|safe }},backgroundColor:'rgba(31,115,183,0.85)',borderRadius:4,borderSkipped:false}]},
-  options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1},grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}
-});
+let dashboardVolumeChart = null;
+
+function buildDashboardChart() {
+  const ctx = document.getElementById('volumeChart');
+  if (!ctx) {
+    return;
+  }
+  if (dashboardVolumeChart) {
+    dashboardVolumeChart.destroy();
+  }
+  dashboardVolumeChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: {{ chart_labels|safe }},
+      datasets: [{
+        label: 'Tickets',
+        data: {{ chart_data|safe }},
+        backgroundColor: 'rgba(31,115,183,0.85)',
+        borderRadius: 4,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+async function refreshDashboardSilently() {
+  const liveRegion = document.getElementById('dashboard-live-region');
+  if (!liveRegion) {
+    return;
+  }
+  try {
+    const response = await fetch(window.location.pathname, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    if (!response.ok) {
+      return;
+    }
+    const html = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const replacement = doc.getElementById('dashboard-live-region');
+    if (!replacement) {
+      return;
+    }
+    liveRegion.replaceWith(replacement);
+    buildDashboardChart();
+  } catch (error) {
+    console.debug('Dashboard refresh skipped', error);
+  }
+}
+
+buildDashboardChart();
+window.setInterval(refreshDashboardSilently, 5000);
 </script>
+{% endif %}
 {% endblock %}

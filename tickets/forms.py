@@ -47,7 +47,10 @@ class TicketCreateForm(forms.Form):
 
 
 class TicketCommentForm(forms.Form):
-    body = forms.CharField(widget=forms.Textarea)
+    body = forms.CharField(
+        widget=forms.Textarea,
+        error_messages={"required": "Comment cannot be empty."},
+    )
 
     def clean_body(self):
         value = self.cleaned_data["body"].strip()

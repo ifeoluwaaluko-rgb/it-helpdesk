@@ -31,6 +31,7 @@ class EmailRuntimeConfig:
     username: str = ""
     password: str = ""
     use_tls: bool = True
+    use_ssl: bool = False
     from_email: str = ""
     enabled: bool = False
 
@@ -116,6 +117,7 @@ def get_smtp_runtime_config():
         username=getattr(dj_settings, "EMAIL_HOST_USER", ""),
         password=getattr(dj_settings, "EMAIL_HOST_PASSWORD", ""),
         use_tls=bool(getattr(dj_settings, "EMAIL_USE_TLS", True)),
+        use_ssl=bool(getattr(dj_settings, "EMAIL_USE_SSL", False)),
         from_email=getattr(dj_settings, "DEFAULT_FROM_EMAIL", ""),
         enabled=bool(getattr(dj_settings, "EMAIL_HOST", "")),
     )
@@ -131,6 +133,7 @@ def get_smtp_runtime_config():
             username=cfg.username,
             password=cfg.password,
             use_tls=cfg.use_tls,
+            use_ssl=cfg.use_ssl,
             from_email=getattr(dj_settings, "DEFAULT_FROM_EMAIL", "") or cfg.username,
             enabled=cfg.is_active,
         )
@@ -168,6 +171,7 @@ def save_smtp_config(cfg, payload, user):
     cfg.port = _parse_port(payload.get("port", 587), 587, "SMTP port")
     cfg.username = _require_text(payload.get("username"), "SMTP username")
     cfg.use_tls = payload.get("use_tls") == "on"
+    cfg.use_ssl = payload.get("use_ssl") == "on"
     cfg.is_active = payload.get("is_active") == "on"
     password = payload.get("password", "").strip()
     if password:
@@ -181,6 +185,7 @@ def save_smtp_config(cfg, payload, user):
     dj_settings.EMAIL_HOST_USER = cfg.username
     dj_settings.EMAIL_HOST_PASSWORD = cfg.password
     dj_settings.EMAIL_USE_TLS = cfg.use_tls
+    dj_settings.EMAIL_USE_SSL = cfg.use_ssl
     return "SMTP settings saved."
 
 

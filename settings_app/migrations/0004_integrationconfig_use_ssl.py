@@ -4,10 +4,11 @@ from django.db import migrations, models
 def sync_use_ssl(apps, schema_editor):
     connection = schema_editor.connection
     table_name = "settings_app_integrationconfig"
+
     with connection.cursor() as cursor:
         description = connection.introspection.get_table_description(cursor, table_name)
-    column_names = {column.name for column in description}
 
+    column_names = {column.name for column in description}
     if "use_ssl" not in column_names:
         schema_editor.execute(
             "ALTER TABLE settings_app_integrationconfig "
