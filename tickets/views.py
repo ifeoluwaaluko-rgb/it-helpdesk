@@ -8,7 +8,7 @@ from django.db.models import Count, Q
 from django.contrib import messages
 from django.conf import settings
 from django.http import JsonResponse, Http404, FileResponse
-from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment
+from .models import Ticket, TicketComment, TicketEditHistory, Profile, TicketAttachment, TicketEvent
 from .classifier import classify, CATEGORY_TREE
 from .assignment import auto_assign
 from .notifications import notify_assignment, notify_status_change, notify_ticket_received
@@ -55,6 +55,21 @@ def _log_status_event(ticket, actor, action, from_status='', to_status='', note=
         status=from_status or ticket.status,
         edit_note=f"EVENT::{action}||{from_status or ''}||{to_status or ''}||{(note or '')[:180]}",
     )
+
+
+def _log_ticket_event(ticket, actor, event_type, from_status='', to_status='', note=''):
+    """Create a TicketEvent record for the audit trail."""
+    try:
+        TicketEvent.objects.create(
+            ticket=ticket,
+            actor=actor,
+            event_type=event_type,
+            from_status=from_status or '',
+            to_status=to_status or '',
+            note=(note or '')[:255],
+        )
+    except Exception:
+        logger.exception('Failed to create TicketEvent for ticket %s', ticket.id)
 
 
 def _get_status_events(ticket):
@@ -339,6 +354,7 @@ def ticket_detail(request, pk):
             if body:
                 TicketComment.objects.create(ticket=ticket, author=request.user, body=body)
                 _mark_first_response(ticket)
+                _log_ticket_event(ticket, request.user, 'commented', from_status=ticket.status, to_status=ticket.status, note='Comment added.')
 
         elif action == 'pickup' and not ticket.assigned_to:
             previous_status = ticket.status
@@ -348,6 +364,7 @@ def ticket_detail(request, pk):
             _mark_first_response(ticket)
             notify_assignment(ticket, request.user)
             _log_status_event(ticket, request.user, 'picked_up', from_status=previous_status, to_status='in_progress', note=f'Picked up by {request.user.get_full_name() or request.user.username}.')
+            _log_ticket_event(ticket, request.user, 'picked_up', from_status=previous_status, to_status='in_progress', note=f'Picked up by {request.user.get_full_name() or request.user.username}.')
             messages.success(request, f'You picked up ticket #{ticket.id}.')
 
         elif action == 'update_status':
@@ -392,6 +409,7 @@ def ticket_detail(request, pk):
                         note = f'Reopened by {request.user.get_full_name() or request.user.username}.'
 
                     _log_status_event(ticket, request.user, action_name, from_status=old_status, to_status=new_status, note=note)
+                    _log_ticket_event(ticket, request.user, action_name, from_status=old_status, to_status=new_status, note=note)
 
                     try:
                         notify_status_change(ticket, request.user)
@@ -423,6 +441,7 @@ def ticket_detail(request, pk):
                         if old:
                             note = f'Reassigned from {old.get_full_name() or old.username} to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}'
                         _log_status_event(ticket, request.user, action_name, from_status=ticket.status, to_status=ticket.status, note=note)
+                        _log_ticket_event(ticket, request.user, action_name, from_status=ticket.status, to_status=ticket.status, note=note)
                         if old:
                             messages.success(request, f'Ticket #{ticket.id} reassigned from {old.get_full_name() or old.username} to {ticket.assigned_to.get_full_name() or ticket.assigned_to.username}.')
                         else:
@@ -447,6 +466,7 @@ def ticket_detail(request, pk):
             ticket.subcategory = request.POST.get('subcategory', '')
             ticket.item = request.POST.get('item', '')
             ticket.save()
+            _log_ticket_event(ticket, request.user, 'category_updated', from_status=ticket.status, to_status=ticket.status, note=f'Category updated to {ticket.get_category_display()}.')
             messages.success(request, 'Category updated.')
 
         return redirect('ticket_detail', pk=pk)
@@ -507,6 +527,7 @@ def ticket_edit(request, pk):
                 if ticket.status == 'resolved' and not ticket.resolved_at:
                     ticket.resolved_at = timezone.now()
             ticket.save()
+            _log_ticket_event(ticket, request.user, 'status_changed', from_status='', to_status=ticket.status, note='Ticket edited.')
             messages.success(request, f'Ticket #{ticket.id} updated.')
             return redirect('ticket_detail', pk=pk)
         except Exception as e:
@@ -597,6 +618,7 @@ def create_ticket(request):
                         )
 
                 notify_ticket_received(ticket)
+                _log_ticket_event(ticket, None, 'created', to_status='open', note=f'Ticket created via {channel}.')
 
                 try:
                     assignee = auto_assign(ticket)

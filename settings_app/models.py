@@ -84,7 +84,7 @@ class IntegrationConfig(models.Model):
             ('gmail_api_oauth', 'Gmail API OAuth2'),
         ],
     )
-    oauth_client_id = models.CharField(max_length=255, blank=True)
+    oauth_client_id = models.CharField(max_length=255, blank=True, default='')
     oauth_token_uri = models.CharField(max_length=255, blank=True, default='https://oauth2.googleapis.com/token')
     webhook_url = models.CharField(max_length=500, blank=True,
                                    help_text='Webhook URL (Teams / Slack)')
@@ -165,15 +165,19 @@ class IntegrationConfig(models.Model):
         verbose_name_plural = 'Integration Configs'
 
 
+    @property
     def masked_password(self):
         return '●●●●●●' if self._password else 'Not set'
 
+    @property
     def masked_token(self):
         return '●●●●●●' if self._access_token else 'Not set'
 
+    @property
     def masked_oauth_client_secret(self):
         return '●●●●●●' if self._oauth_client_secret else 'Not set'
 
+    @property
     def masked_oauth_refresh_token(self):
         return '●●●●●●' if self._oauth_refresh_token else 'Not set'
 
